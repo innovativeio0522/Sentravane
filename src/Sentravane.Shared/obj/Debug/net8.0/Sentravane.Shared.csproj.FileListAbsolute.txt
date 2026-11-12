@@ -1,0 +1,12 @@
+F:\Github Projects\Sentravane\src\Sentravane.Shared\bin\Debug\net8.0\Sentravane.Shared.deps.json
+F:\Github Projects\Sentravane\src\Sentravane.Shared\bin\Debug\net8.0\Sentravane.Shared.dll
+F:\Github Projects\Sentravane\src\Sentravane.Shared\bin\Debug\net8.0\Sentravane.Shared.pdb
+F:\Github Projects\Sentravane\src\Sentravane.Shared\obj\Debug\net8.0\Sentravane.Shared.GeneratedMSBuildEditorConfig.editorconfig
+F:\Github Projects\Sentravane\src\Sentravane.Shared\obj\Debug\net8.0\Sentravane.Shared.AssemblyInfoInputs.cache
+F:\Github Projects\Sentravane\src\Sentravane.Shared\obj\Debug\net8.0\Sentravane.Shared.AssemblyInfo.cs
+F:\Github Projects\Sentravane\src\Sentravane.Shared\obj\Debug\net8.0\Sentravane.Shared.csproj.CoreCompileInputs.cache
+F:\Github Projects\Sentravane\src\Sentravane.Shared\obj\Debug\net8.0\Sentravane.Shared.sourcelink.json
+F:\Github Projects\Sentravane\src\Sentravane.Shared\obj\Debug\net8.0\Sentravane.Shared.dll
+F:\Github Projects\Sentravane\src\Sentravane.Shared\obj\Debug\net8.0\refint\Sentravane.Shared.dll
+F:\Github Projects\Sentravane\src\Sentravane.Shared\obj\Debug\net8.0\Sentravane.Shared.pdb
+F:\Github Projects\Sentravane\src\Sentravane.Shared\obj\Debug\net8.0\ref\Sentravane.Shared.dll
