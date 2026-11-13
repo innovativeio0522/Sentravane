@@ -117,3 +117,4 @@ Write-Host "    Service Status: $status" -ForegroundColor Green
 Write-Host "    Install Path  : $InstallDir" -ForegroundColor Green
 Write-Host "    CLI Tool      : sentravane (Run 'sentravane status' to verify)" -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
+
