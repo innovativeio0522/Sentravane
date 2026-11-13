@@ -107,4 +107,12 @@ target/
 tmp/
 temp/
 .temp/
+graphify-out/
+bin/
+obj/
+*.db
+*.sqlite
+*.log
+.vs/
+.vscode/
 
