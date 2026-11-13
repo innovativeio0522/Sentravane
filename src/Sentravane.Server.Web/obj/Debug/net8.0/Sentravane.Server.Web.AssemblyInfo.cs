@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Sentravane.Server.Web")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+15be0681303c9cf698896059482871d3b04c3867")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+25c6751988f58137f02b5ab4eb67b28df9908fef")]
 [assembly: System.Reflection.AssemblyProductAttribute("Sentravane.Server.Web")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Sentravane.Server.Web")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
