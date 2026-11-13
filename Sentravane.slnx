@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Sentravane.Cli/Sentravane.Cli.csproj" />
     <Project Path="src/Sentravane.Sensor.Service/Sentravane.Sensor.Service.csproj" />
     <Project Path="src/Sentravane.Server.Web/Sentravane.Server.Web.csproj" />
     <Project Path="src/Sentravane.Shared/Sentravane.Shared.csproj" />

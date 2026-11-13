@@ -164,3 +164,4 @@ public class NamedPipeServerService : INamedPipeServerService, IDisposable
         Stop();
     }
 }
+
