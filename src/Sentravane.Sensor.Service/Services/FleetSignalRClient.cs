@@ -16,7 +16,9 @@ public interface IFleetSignalRClient
 {
     Task StartAsync(CancellationToken cancellationToken);
     Task StopAsync();
+    Task DrainOfflineQueueAsync();
     string EndpointId { get; }
+    bool IsConnected { get; }
 }
 
 public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
@@ -30,6 +32,7 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
     private string _endpointId = string.Empty;
 
     public string EndpointId => _endpointId;
+    public bool IsConnected => _hubConnection?.State == HubConnectionState.Connected;
 
     public FleetSignalRClient(
         ILogger<FleetSignalRClient> logger,
@@ -60,6 +63,12 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
             .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15) })
             .Build();
 
+        _hubConnection.Reconnected += async _ =>
+        {
+            _logger.LogInformation("SignalR connection re-established with Fleet Hub. Draining offline telemetry queue...");
+            await DrainOfflineQueueAsync();
+        };
+
         _hubConnection.On<string>("IsolateEndpoint", incidentId =>
         {
             _logger.LogWarning("Received IsolateEndpoint command from Fleet Hub for incident {IncidentId}", incidentId);
@@ -75,11 +84,11 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
         _correlationEngine.IncidentDetected += async (_, snapshot) =>
         {
             var enrichedSnapshot = snapshot with { EndpointId = _endpointId };
-            if (_hubConnection.State == HubConnectionState.Connected)
+            if (IsConnected)
             {
                 try
                 {
-                    await _hubConnection.InvokeAsync("ReportIncident", enrichedSnapshot, cancellationToken);
+                    await _hubConnection!.InvokeAsync("ReportIncident", enrichedSnapshot, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -103,10 +112,37 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
                 ActiveCanariesMonitored = 4
             };
             await _hubConnection.InvokeAsync("SendHeartbeat", heartbeat, cancellationToken);
+
+            // Drain any pending events from previous offline runs
+            await DrainOfflineQueueAsync();
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not initially connect to Fleet Hub at {ServerUrl}. Will retry automatically.", serverUrl);
+        }
+    }
+
+    public async Task DrainOfflineQueueAsync()
+    {
+        if (!IsConnected) return;
+
+        try
+        {
+            int drainedCount = 0;
+            while (await _localStore.DequeueHeartbeatAsync() is { } queued)
+            {
+                await _hubConnection!.InvokeAsync("SendHeartbeat", queued);
+                drainedCount++;
+            }
+
+            if (drainedCount > 0)
+            {
+                _logger.LogInformation("Successfully drained {Count} offline telemetry events to Fleet Hub", drainedCount);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while draining offline telemetry queue");
         }
     }
 

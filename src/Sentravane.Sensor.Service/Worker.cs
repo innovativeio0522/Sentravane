@@ -12,15 +12,18 @@ public class Worker : BackgroundService
     private readonly ILogger<Worker> _logger;
     private readonly ICorrelationEngine _correlationEngine;
     private readonly IFleetSignalRClient _fleetClient;
+    private readonly INamedPipeServerService _pipeServer;
 
     public Worker(
         ILogger<Worker> logger,
         ICorrelationEngine correlationEngine,
-        IFleetSignalRClient fleetClient)
+        IFleetSignalRClient fleetClient,
+        INamedPipeServerService pipeServer)
     {
         _logger = logger;
         _correlationEngine = correlationEngine;
         _fleetClient = fleetClient;
+        _pipeServer = pipeServer;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -29,15 +32,24 @@ public class Worker : BackgroundService
 
         try
         {
-            // Start Correlation and Detection Engine
+            // Start Local Named Pipe IPC listener
+            _pipeServer.Start();
+
+            // Start Correlation and Detection Engine (Canaries + ETW + Rapid Encryption Anomaly)
             _correlationEngine.Start();
 
-            // Connect to Fleet Hub
+            // Connect to Fleet Hub over SignalR
             await _fleetClient.StartAsync(stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                await Task.Delay(10000, stoppingToken);
+                // Periodic maintenance: drain offline queue if connection restored
+                if (_fleetClient.IsConnected)
+                {
+                    await _fleetClient.DrainOfflineQueueAsync();
+                }
+
+                await Task.Delay(15000, stoppingToken);
             }
         }
         catch (OperationCanceledException)
@@ -51,6 +63,7 @@ public class Worker : BackgroundService
         finally
         {
             _correlationEngine.Stop();
+            _pipeServer.Stop();
             await _fleetClient.StopAsync();
             _logger.LogInformation("Sentravane Sensor Service stopped gracefully");
         }
