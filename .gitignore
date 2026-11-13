@@ -21,6 +21,7 @@ Thumbs.db
 
 # Editor & IDE artifacts
 .idea/
+.vs/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -42,6 +43,25 @@ logs/
 *.sqlite
 *.sqlite3
 *.db
+
+# .NET / C# Build Artifacts
+[Bb]in/
+[Oo]bj/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+*.pidb
+*.booproj
+*.svclog
+*.pdb
+*.dll
+*.exe
+
+# Graphify & agent output
+graphify-out/
+.system_generated/
 
 # Node.js / Frontend
 node_modules/
@@ -89,30 +109,7 @@ htmlcov/
 .coverage
 .coverage.*
 
-# Go
-bin/
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-
-# Rust
-target/
-**/*.rs.bk
-
 # Temporary & cache
 tmp/
 temp/
 .temp/
-graphify-out/
-bin/
-obj/
-*.db
-*.sqlite
-*.log
-.vs/
-.vscode/
-
