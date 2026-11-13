@@ -24,7 +24,9 @@ public class CorrelationEngine : ICorrelationEngine, IDisposable
     private readonly IEtwCollectorService _etwCollector;
     private readonly IContainmentService _containmentService;
     private readonly ILocalStoreService _localStore;
-    private readonly ConcurrentDictionary<string, DateTime> _recentCanaryAlerts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IRapidEncryptionDetector _rapidEncryptionDetector;
+    private readonly IForensicDumpService _dumpService;
+    private readonly ConcurrentDictionary<string, DateTime> _recentAlerts = new(StringComparer.OrdinalIgnoreCase);
 
     public event EventHandler<ForensicSnapshotPayload>? IncidentDetected;
 
@@ -33,26 +35,32 @@ public class CorrelationEngine : ICorrelationEngine, IDisposable
         ICanaryManager canaryManager,
         IEtwCollectorService etwCollector,
         IContainmentService containmentService,
-        ILocalStoreService localStore)
+        ILocalStoreService localStore,
+        IRapidEncryptionDetector rapidEncryptionDetector,
+        IForensicDumpService dumpService)
     {
         _logger = logger;
         _canaryManager = canaryManager;
         _etwCollector = etwCollector;
         _containmentService = containmentService;
         _localStore = localStore;
+        _rapidEncryptionDetector = rapidEncryptionDetector;
+        _dumpService = dumpService;
     }
 
     public void Start()
     {
         _canaryManager.InitializeCanaries();
         _etwCollector.FileAccessed += OnEtwFileAccessed;
+        _rapidEncryptionDetector.EncryptionAnomalyDetected += OnRapidEncryptionAnomaly;
         _etwCollector.Start();
-        _logger.LogInformation("Correlation Engine armed and listening to Canary and ETW telemetry");
+        _logger.LogInformation("Correlation Engine armed with Canary + Rapid Encryption Anomaly detection");
     }
 
     public void Stop()
     {
         _etwCollector.FileAccessed -= OnEtwFileAccessed;
+        _rapidEncryptionDetector.EncryptionAnomalyDetected -= OnRapidEncryptionAnomaly;
         _etwCollector.Stop();
         _canaryManager.CleanupCanaries();
         _logger.LogInformation("Correlation Engine disarmed");
@@ -66,26 +74,65 @@ public class CorrelationEngine : ICorrelationEngine, IDisposable
         {
             HandleCanaryTouch(e.ProcessId, e.ProcessName, e.FilePath, e.Operation);
         }
+        else if (e.Operation.Contains("Write") || e.Operation.Contains("SetInfo") || e.Operation.Contains("Rename"))
+        {
+            _rapidEncryptionDetector.RecordFileModification(e.ProcessId, e.ProcessName, e.FilePath);
+        }
+    }
+
+    private void OnRapidEncryptionAnomaly(object? sender, RapidEncryptionAlert alert)
+    {
+        TriggerIncident(
+            alert.ProcessId,
+            alert.ProcessName,
+            IncidentReason.RapidEncryptionAnomaly,
+            null,
+            alert.SampleFiles,
+            $"Rapid file encryption anomaly detected: {alert.ModificationCount} files modified in {alert.TimeWindow.TotalSeconds}s"
+        );
     }
 
     private void HandleCanaryTouch(int pid, string processName, string filePath, string operation)
     {
-        var key = $"{pid}:{filePath}";
-        if (_recentCanaryAlerts.TryGetValue(key, out var lastTime) && (DateTime.UtcNow - lastTime).TotalSeconds < 5)
+        TriggerIncident(
+            pid,
+            processName,
+            IncidentReason.CanaryModification,
+            filePath,
+            new List<string> { filePath },
+            $"Canary tripwire hit: {operation} on decoy {filePath}"
+        );
+    }
+
+    private void TriggerIncident(
+        int pid,
+        string processName,
+        IncidentReason reason,
+        string? triggerPath,
+        IReadOnlyList<string> affectedFiles,
+        string logMessage)
+    {
+        var key = $"{pid}:{reason}";
+        if (_recentAlerts.TryGetValue(key, out var lastTime) && (DateTime.UtcNow - lastTime).TotalSeconds < 5)
         {
             return;
         }
-        _recentCanaryAlerts[key] = DateTime.UtcNow;
+        _recentAlerts[key] = DateTime.UtcNow;
 
-        _logger.LogCritical("CANARY TRIPWIRE HIT! PID {Pid} ({ProcessName}) executed {Op} on decoy {Path}", pid, processName, operation, filePath);
+        _logger.LogCritical("SECURITY INCIDENT: {Message}", logMessage);
 
         // 1. Atomic containment: Suspend process tree immediately
-        var containmentResult = _containmentService.SuspendProcessTree(pid, $"Canary violation on {filePath}");
+        var containmentResult = _containmentService.SuspendProcessTree(pid, logMessage);
 
         // 2. Dynamic network isolation
         _containmentService.IsolateEndpointNetwork();
 
-        // 3. Capture process metadata
+        var incidentId = Guid.NewGuid().ToString("N");
+
+        // 3. Capture process memory dump
+        string? dumpPath = _dumpService.GenerateProcessMinidump(pid, incidentId);
+
+        // 4. Capture process metadata
         string processPath = "Unknown";
         string? cmdLine = null;
         try
@@ -98,7 +145,7 @@ public class CorrelationEngine : ICorrelationEngine, IDisposable
             _logger.LogDebug(ex, "Could not read main module for PID {Pid}", pid);
         }
 
-        // 4. Capture active network sockets
+        // 5. Capture active network sockets
         var sockets = new List<SocketEntry>();
         try
         {
@@ -123,13 +170,23 @@ public class CorrelationEngine : ICorrelationEngine, IDisposable
             _logger.LogDebug(ex, "Failed to capture TCP sockets for PID {Pid}", pid);
         }
 
+        var actions = new List<string>
+        {
+            $"NtSuspendProcess on {containmentResult.SuspendedPids.Count} processes",
+            "WFP Ephemeral Network Quarantine applied"
+        };
+        if (!string.IsNullOrEmpty(dumpPath))
+        {
+            actions.Add($"Forensic dump captured at {dumpPath}");
+        }
+
         var snapshot = new ForensicSnapshotPayload
         {
-            EndpointId = Environment.MachineName, // Replaced or supplemented by Fleet client
-            IncidentId = Guid.NewGuid().ToString("N"),
+            EndpointId = Environment.MachineName,
+            IncidentId = incidentId,
             TimestampUtc = DateTime.UtcNow,
-            TriggerReason = IncidentReason.CanaryModification,
-            CanaryFilePath = filePath,
+            TriggerReason = reason,
+            CanaryFilePath = triggerPath,
             OffendingProcess = new ProcessEntry
             {
                 Pid = pid,
@@ -138,12 +195,8 @@ public class CorrelationEngine : ICorrelationEngine, IDisposable
                 CommandLine = cmdLine
             },
             ActiveNetworkSockets = sockets,
-            RecentModifiedFiles = new List<string> { filePath },
-            ContainmentActionsTaken = new List<string>
-            {
-                $"NtSuspendProcess on {containmentResult.SuspendedPids.Count} processes",
-                "WFP Ephemeral Network Quarantine applied"
-            }
+            RecentModifiedFiles = new List<string>(affectedFiles),
+            ContainmentActionsTaken = actions
         };
 
         // Record locally in encrypted store

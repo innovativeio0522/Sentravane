@@ -15,8 +15,11 @@ builder.Services.AddSingleton<ILocalStoreService, LocalStoreService>();
 builder.Services.AddSingleton<ICanaryManager, CanaryManager>();
 builder.Services.AddSingleton<IContainmentService, ContainmentService>();
 builder.Services.AddSingleton<IEtwCollectorService, EtwCollectorService>();
+builder.Services.AddSingleton<IRapidEncryptionDetector, RapidEncryptionDetector>();
+builder.Services.AddSingleton<IForensicDumpService, ForensicDumpService>();
 builder.Services.AddSingleton<ICorrelationEngine, CorrelationEngine>();
 builder.Services.AddSingleton<IFleetSignalRClient, FleetSignalRClient>();
+builder.Services.AddSingleton<INamedPipeServerService, NamedPipeServerService>();
 
 // Background Worker
 builder.Services.AddHostedService<Worker>();
