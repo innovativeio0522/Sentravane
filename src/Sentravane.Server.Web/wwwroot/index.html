@@ -37,12 +37,13 @@
         </div>
 
         <div class="flex items-center space-x-6">
-            <div id="connectionStatus" class="flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800">
-                <span class="h-2 w-2 rounded-full bg-emerald-400 badge-pulse"></span>
+            <div id="connectionStatus" class="flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800 transition">
+                <span id="connPulse" class="h-2 w-2 rounded-full bg-emerald-400 badge-pulse"></span>
                 <span class="text-emerald-400 font-semibold" id="connText">WS CONNECTED</span>
             </div>
             <div class="text-xs text-slate-400">
-                Tenant: <span class="text-slate-200 font-mono font-medium">Acme Security Corp</span>
+                Tenant: <span id="tenantName" class="text-slate-200 font-mono font-medium">Loading...</span>
+                <span id="tenantSeats" class="text-[10px] text-slate-500 font-mono ml-1"></span>
             </div>
         </div>
     </header>
@@ -231,25 +232,85 @@
         function initSignalR() {
             connection = new signalR.HubConnectionBuilder()
                 .withUrl(`${API_BASE}/hubs/fleet`)
-                .withAutomaticReconnect()
+                .withAutomaticReconnect([0, 2000, 5000, 10000])
                 .build();
+
+            function setConnected() {
+                const badge = document.getElementById('connectionStatus');
+                const pulse = document.getElementById('connPulse');
+                const text = document.getElementById('connText');
+                badge.className = "flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-emerald-900/60 shadow-sm shadow-emerald-500/10";
+                pulse.className = "h-2 w-2 rounded-full bg-emerald-400 badge-pulse";
+                text.className = "text-emerald-400 font-semibold";
+                text.innerText = "WS CONNECTED";
+            }
+
+            function setReconnecting() {
+                const badge = document.getElementById('connectionStatus');
+                const pulse = document.getElementById('connPulse');
+                const text = document.getElementById('connText');
+                badge.className = "flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-amber-900/60";
+                pulse.className = "h-2 w-2 rounded-full bg-amber-400 badge-pulse";
+                text.className = "text-amber-400 font-semibold";
+                text.innerText = "RECONNECTING...";
+            }
+
+            function setDisconnected() {
+                const badge = document.getElementById('connectionStatus');
+                const pulse = document.getElementById('connPulse');
+                const text = document.getElementById('connText');
+                badge.className = "flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-red-900/80 shadow-sm shadow-red-500/10";
+                pulse.className = "h-2 w-2 rounded-full bg-red-500";
+                text.className = "text-red-400 font-semibold";
+                text.innerText = "DISCONNECTED";
+            }
+
+            connection.onreconnecting(() => {
+                console.warn("[SignalR] Reconnecting...");
+                setReconnecting();
+            });
+
+            connection.onreconnected(() => {
+                console.log("[SignalR] Reconnected successfully.");
+                setConnected();
+                fetchEndpoints();
+                fetchIncidents();
+            });
+
+            connection.onclose(() => {
+                console.error("[SignalR] Connection closed.");
+                setDisconnected();
+            });
 
             connection.on("ReportIncident", (snapshot) => {
                 console.log("[SignalR] Real-time incident received:", snapshot);
-                renderNewIncident(snapshot);
+                fetchIncidents();
                 fetchEndpoints();
             });
 
             connection.start()
                 .then(() => {
-                    document.getElementById('connText').innerText = "WS CONNECTED";
-                    document.getElementById('connectionStatus').classList.remove('border-red-900');
+                    setConnected();
                 })
                 .catch(err => {
-                    console.error("[SignalR] Connection error:", err);
-                    document.getElementById('connText').innerText = "DISCONNECTED";
-                    document.getElementById('connectionStatus').classList.add('border-red-900');
+                    console.error("[SignalR] Initial connection failed:", err);
+                    setDisconnected();
                 });
+        }
+
+        // Fetch Dynamic Tenant Context
+        async function fetchTenantInfo() {
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/tenant/current`);
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('tenantName').innerText = data.name;
+                    document.getElementById('tenantSeats').innerText = `(${data.endpointsCount}/${data.maxSeats} seats)`;
+                }
+            } catch (err) {
+                console.error("Failed to load tenant info:", err);
+                document.getElementById('tenantName').innerText = "Default Tenant";
+            }
         }
 
         // Tab Switching
@@ -418,6 +479,7 @@
         // Initialize on load
         window.addEventListener('DOMContentLoaded', () => {
             initSignalR();
+            fetchTenantInfo();
             fetchEndpoints();
             fetchIncidents();
         });
