@@ -18,7 +18,7 @@ public class EnrollmentController(
     [HttpPost("enroll")]
     public async Task<ActionResult<EnrollmentResponse>> Enroll([FromBody] EnrollmentRequest request)
     {
-        var (canEnroll, errorMessage, tenant) = await licenseManager.CanEnrollAsync(request.EnrollmentToken);
+        var (canEnroll, errorMessage, tenant) = await licenseManager.CanEnrollAsync(request.EnrollmentToken, request.HardwareUuid);
         if (!canEnroll || tenant == null)
         {
             return BadRequest(new { error = errorMessage });
