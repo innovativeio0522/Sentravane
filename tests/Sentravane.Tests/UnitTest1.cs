@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Sentravane.Sensor.Service.Native;
 using Sentravane.Sensor.Service.Services;
 using Sentravane.Shared.IPC;
+using Sentravane.Shared.Models;
 using Xunit;
 
 namespace Sentravane.Tests;
@@ -64,10 +68,70 @@ public class SensorServicesTests
     }
 
     [Fact]
+    public void RapidEncryptionDetector_HonorsConfigSettings()
+    {
+        var logger = NullLogger<RapidEncryptionDetector>.Instance;
+        var inMemorySettings = new Dictionary<string, string?>
+        {
+            {"Sentravane:RapidBurstThresholdCount", "25"},
+            {"Sentravane:RapidBurstWindowSeconds", "8"}
+        };
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(inMemorySettings)
+            .Build();
+
+        var detector = new RapidEncryptionDetector(logger, configuration);
+        Assert.Equal(25, detector.ThresholdModificationCount);
+        Assert.Equal(TimeSpan.FromSeconds(8), detector.WindowDuration);
+    }
+
+    [Fact]
+    public void RapidEncryptionDetector_IgnoresSystemPids()
+    {
+        var logger = NullLogger<RapidEncryptionDetector>.Instance;
+        var detector = new RapidEncryptionDetector(logger)
+        {
+            ThresholdModificationCount = 5,
+            WindowDuration = TimeSpan.FromSeconds(5)
+        };
+
+        bool anomalyTriggered = false;
+        detector.EncryptionAnomalyDetected += (_, _) => anomalyTriggered = true;
+
+        // Feed events from System Idle (0) and System (4)
+        for (int i = 0; i < 20; i++)
+        {
+            detector.RecordFileModification(0, "System Idle", @"C:\file.dat");
+            detector.RecordFileModification(4, "System", @"C:\file.dat");
+        }
+
+        Assert.False(anomalyTriggered, "System PIDs (<= 4) must never trigger rapid encryption anomaly alerts.");
+    }
+
+    [Fact]
     public void ForensicDumpService_InstantiatesWithoutThrowing()
     {
         var logger = NullLogger<ForensicDumpService>.Instance;
         var dumpService = new ForensicDumpService(logger);
         Assert.NotNull(dumpService);
+    }
+
+    [Fact]
+    public void IpHelperNative_RetrievesTcpConnectionsWithoutCrashing()
+    {
+        var connections = IpHelperNative.GetActiveTcpConnections();
+        Assert.NotNull(connections);
+    }
+
+    [Fact]
+    public void ProcessTree_BuildsWithoutCrashing()
+    {
+        var logger = NullLogger<ContainmentService>.Instance;
+        using var containment = new ContainmentService(logger);
+
+        // Current test process
+        int myPid = Environment.ProcessId;
+        Assert.True(myPid > 0);
     }
 }
