@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentravane Fleet Security Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .badge-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .4; }
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+        <div class="flex items-center space-x-3">
+            <div class="h-9 w-9 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <i class="fa-solid fa-shield-halved text-white text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    SENTRAVANE <span class="text-xs bg-cyan-950 text-cyan-400 border border-cyan-800/60 px-2 py-0.5 rounded font-mono font-medium">FLEET EDR</span>
+                </h1>
+                <p class="text-xs text-slate-400">Driverless Ransomware Containment & Incident Response</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-6">
+            <div id="connectionStatus" class="flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800">
+                <span class="h-2 w-2 rounded-full bg-emerald-400 badge-pulse"></span>
+                <span class="text-emerald-400 font-semibold" id="connText">WS CONNECTED</span>
+            </div>
+            <div class="text-xs text-slate-400">
+                Tenant: <span class="text-slate-200 font-mono font-medium">Acme Security Corp</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+
+        <!-- Stat Counter Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+                    <span>TOTAL MONITORED</span>
+                    <i class="fa-solid fa-laptop text-slate-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-white mt-2" id="statEndpointsCount">0</div>
+                <div class="text-xs text-emerald-400 mt-1 flex items-center gap-1">
+                    <i class="fa-solid fa-circle-check text-[10px]"></i> Active Fleet Sensors
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+                    <span>SECURITY INCIDENTS</span>
+                    <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-amber-400 mt-2" id="statIncidentsCount">0</div>
+                <div class="text-xs text-slate-400 mt-1">
+                    Canary touches & burst triggers
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+                    <span>QUARANTINED ENDPOINTS</span>
+                    <i class="fa-solid fa-network-wired text-red-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-red-400 mt-2" id="statQuarantineCount">0</div>
+                <div class="text-xs text-red-400/80 mt-1">
+                    Dynamic WFP Outbound Severed
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+                    <span>CANARY INTEGRITY</span>
+                    <i class="fa-solid fa-shield-virus text-cyan-400"></i>
+                </div>
+                <div class="text-2xl font-bold text-cyan-400 mt-2" id="statCanaryStatus">100%</div>
+                <div class="text-xs text-cyan-400/80 mt-1">
+                    Zero-Byte Honeypots Armed
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex space-x-2 border-b border-slate-800 pb-2">
+            <button onclick="switchTab('endpoints')" id="tabBtnEndpoints" class="px-4 py-2 text-sm font-semibold rounded-lg bg-cyan-600 text-white flex items-center gap-2">
+                <i class="fa-solid fa-desktop"></i> Endpoints
+            </button>
+            <button onclick="switchTab('incidents')" id="tabBtnIncidents" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-biohazard"></i> Incidents & Forensics
+            </button>
+            <button onclick="switchTab('policy')" id="tabBtnPolicy" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-sliders"></i> Fleet Policy Settings
+            </button>
+        </div>
+
+        <!-- TAB 1: ENDPOINTS LIST -->
+        <section id="tabEndpoints" class="space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Registered Windows Endpoints</h2>
+                <button onclick="fetchEndpoints()" class="text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-md flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                </button>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
+                        <tr>
+                            <th class="px-6 py-3">Hostname</th>
+                            <th class="px-6 py-3">Status</th>
+                            <th class="px-6 py-3">OS / Sensor Version</th>
+                            <th class="px-6 py-3">Last Heartbeat</th>
+                            <th class="px-6 py-3 text-right">Containment Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="endpointsTableBody" class="divide-y divide-slate-800 font-mono text-xs">
+                        <tr>
+                            <td colspan="5" class="px-6 py-8 text-center text-slate-500 font-sans">
+                                Loading endpoint registry...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TAB 2: INCIDENTS & FORENSICS -->
+        <section id="tabIncidents" class="space-y-4 hidden">
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Live Security Alerts & Forensics</h2>
+                <button onclick="fetchIncidents()" class="text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-md flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrows-rotate"></i> Refresh Alerts
+                </button>
+            </div>
+
+            <div id="incidentsContainer" class="space-y-3">
+                <div class="p-8 text-center text-slate-500 bg-slate-900 border border-slate-800 rounded-xl">
+                    No active ransomware containment incidents reported. Fleet is secure.
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: FLEET POLICY CONFIGURATION -->
+        <section id="tabPolicy" class="space-y-4 hidden">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6 max-w-2xl">
+                <div>
+                    <h2 class="text-base font-semibold text-white">Central Fleet Policy Configuration</h2>
+                    <p class="text-xs text-slate-400 mt-1">Changes are broadcast instantly to all online Windows Sensors over SignalR without service restart.</p>
+                </div>
+
+                <form id="policyForm" onsubmit="savePolicy(event)" class="space-y-5 text-sm">
+                    <div class="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800">
+                        <div>
+                            <div class="font-medium text-slate-200">Canary Decoy Tripwires</div>
+                            <div class="text-xs text-slate-400">Deploy hidden documents in interactive user folders to trip ransomware</div>
+                        </div>
+                        <input type="checkbox" id="polCanaryEnabled" class="w-5 h-5 accent-cyan-500 rounded bg-slate-800 border-slate-700" checked>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800">
+                        <div>
+                            <div class="font-medium text-slate-200">Dynamic WFP Ephemeral Quarantine</div>
+                            <div class="text-xs text-slate-400">Instantly block all outbound network sockets upon threat detection</div>
+                        </div>
+                        <input type="checkbox" id="polWfpEnabled" class="w-5 h-5 accent-cyan-500 rounded bg-slate-800 border-slate-700" checked>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800">
+                        <div>
+                            <div class="font-medium text-slate-200">Forensic Memory Minidump</div>
+                            <div class="text-xs text-slate-400">Capture crash dump of offending process tree via dbghelp.dll</div>
+                        </div>
+                        <input type="checkbox" id="polDumpEnabled" class="w-5 h-5 accent-cyan-500 rounded bg-slate-800 border-slate-700" checked>
+                    </div>
+
+                    <div class="space-y-2 p-3 bg-slate-950 rounded-lg border border-slate-800">
+                        <div class="flex justify-between">
+                            <label class="font-medium text-slate-200">Rapid Burst Threshold (Files)</label>
+                            <span id="burstThresholdVal" class="font-mono text-cyan-400 font-semibold">40</span>
+                        </div>
+                        <input type="range" id="polBurstCount" min="10" max="150" step="5" value="40" 
+                            oninput="document.getElementById('burstThresholdVal').innerText = this.value"
+                            class="w-full accent-cyan-500 cursor-pointer">
+                        <p class="text-xs text-slate-500">Number of file touches required within time window to trigger anomaly containment.</p>
+                    </div>
+
+                    <div class="space-y-2 p-3 bg-slate-950 rounded-lg border border-slate-800">
+                        <div class="flex justify-between">
+                            <label class="font-medium text-slate-200">Sliding Time Window (Seconds)</label>
+                            <span id="burstWindowVal" class="font-mono text-cyan-400 font-semibold">5s</span>
+                        </div>
+                        <input type="range" id="polBurstWindow" min="2" max="30" step="1" value="5" 
+                            oninput="document.getElementById('burstWindowVal').innerText = this.value + 's'"
+                            class="w-full accent-cyan-500 cursor-pointer">
+                        <p class="text-xs text-slate-500">Duration of in-memory sliding window for file modification rate tracking.</p>
+                    </div>
+
+                    <div class="pt-3">
+                        <button type="submit" class="w-full py-2.5 px-4 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded-lg shadow-lg shadow-cyan-600/20 transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-satellite-dish"></i> Save & Broadcast to Active Sensors
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let connection = null;
+
+        // Init SignalR Connection
+        function initSignalR() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl(`${API_BASE}/hubs/fleet`)
+                .withAutomaticReconnect()
+                .build();
+
+            connection.on("ReportIncident", (snapshot) => {
+                console.log("[SignalR] Real-time incident received:", snapshot);
+                renderNewIncident(snapshot);
+                fetchEndpoints();
+            });
+
+            connection.start()
+                .then(() => {
+                    document.getElementById('connText').innerText = "WS CONNECTED";
+                    document.getElementById('connectionStatus').classList.remove('border-red-900');
+                })
+                .catch(err => {
+                    console.error("[SignalR] Connection error:", err);
+                    document.getElementById('connText').innerText = "DISCONNECTED";
+                    document.getElementById('connectionStatus').classList.add('border-red-900');
+                });
+        }
+
+        // Tab Switching
+        function switchTab(tab) {
+            ['endpoints', 'incidents', 'policy'].forEach(t => {
+                document.getElementById(`tab${capitalize(t)}`).classList.add('hidden');
+                document.getElementById(`tabBtn${capitalize(t)}`).className = 
+                    "px-4 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 flex items-center gap-2";
+            });
+
+            document.getElementById(`tab${capitalize(tab)}`).classList.remove('hidden');
+            document.getElementById(`tabBtn${capitalize(tab)}`).className = 
+                "px-4 py-2 text-sm font-semibold rounded-lg bg-cyan-600 text-white flex items-center gap-2";
+
+            if (tab === 'endpoints') fetchEndpoints();
+            if (tab === 'incidents') fetchIncidents();
+            if (tab === 'policy') fetchPolicy();
+        }
+
+        function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+        // Fetch Endpoints
+        async function fetchEndpoints() {
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/endpoints`);
+                const endpoints = await res.json();
+                const tbody = document.getElementById('endpointsTableBody');
+                document.getElementById('statEndpointsCount').innerText = endpoints.length;
+
+                let quarantined = 0;
+                endpoints.forEach(e => { if (e.status === 3 || e.status === 'Quarantined') quarantined++; });
+                document.getElementById('statQuarantineCount').innerText = quarantined;
+
+                if (!endpoints.length) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 font-sans">No endpoints enrolled. Install sensor via install-sensor.ps1</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = endpoints.map(e => {
+                    const isQuarantined = e.status === 3 || e.status === 'Quarantined';
+                    const statusBadge = isQuarantined 
+                        ? `<span class="bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded font-semibold flex items-center gap-1 w-max"><i class="fa-solid fa-lock text-[10px]"></i> QUARANTINED</span>`
+                        : `<span class="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-semibold flex items-center gap-1 w-max"><i class="fa-solid fa-circle text-[8px]"></i> ONLINE</span>`;
+
+                    const actionBtn = isQuarantined
+                        ? `<button onclick="releaseEndpoint('${e.id}')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-sans text-xs rounded transition flex items-center gap-1"><i class="fa-solid fa-unlock"></i> Lift Quarantine</button>`
+                        : `<button onclick="isolateEndpoint('${e.id}')" class="px-3 py-1 bg-red-600 hover:bg-red-500 text-white font-sans text-xs rounded transition flex items-center gap-1"><i class="fa-solid fa-ban"></i> Isolate</button>`;
+
+                    return `
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="px-6 py-4 font-semibold text-slate-200 flex items-center gap-2">
+                                <i class="fa-solid fa-display text-slate-500 text-sm"></i>
+                                ${e.hostname || 'Unknown'}
+                            </td>
+                            <td class="px-6 py-4">${statusBadge}</td>
+                            <td class="px-6 py-4 text-slate-400 font-sans">${e.osVersion || 'Windows'} (v${e.sensorVersion})</td>
+                            <td class="px-6 py-4 text-slate-400">${new Date(e.lastHeartbeatUtc).toLocaleTimeString()}</td>
+                            <td class="px-6 py-4 text-right flex justify-end">${actionBtn}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error("Failed fetching endpoints:", err);
+            }
+        }
+
+        // Fetch Incidents
+        async function fetchIncidents() {
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/incidents`);
+                const incidents = await res.json();
+                document.getElementById('statIncidentsCount').innerText = incidents.length;
+                const container = document.getElementById('incidentsContainer');
+
+                if (!incidents.length) {
+                    container.innerHTML = `<div class="p-8 text-center text-slate-500 bg-slate-900 border border-slate-800 rounded-xl">No security incidents recorded. All canaries and file operations nominal.</div>`;
+                    return;
+                }
+
+                container.innerHTML = incidents.map(inc => `
+                    <div class="bg-slate-900 border border-red-900/60 p-5 rounded-xl shadow-lg space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <span class="bg-red-600/20 text-red-400 border border-red-600/40 p-2 rounded-lg text-sm">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                </span>
+                                <div>
+                                    <div class="font-bold text-slate-100 flex items-center gap-2">
+                                        ${inc.offendingProcessName || 'Malicious Process'} 
+                                        <span class="text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">PID: ${inc.offendingPid}</span>
+                                    </div>
+                                    <div class="text-xs text-slate-400 font-mono">${inc.triggerCanaryPath || 'Rapid Encryption Burst'}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-xs text-red-400 font-mono font-semibold">${new Date(inc.occurredAtUtc).toLocaleString()}</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300 space-y-1">
+                            <div><span class="text-slate-500">SHA256:</span> ${inc.sha256Hash || 'N/A'}</div>
+                            <div><span class="text-slate-500">Executable:</span> ${inc.offendingImagePath || 'N/A'}</div>
+                            <div><span class="text-slate-500">Actions:</span> <span class="text-emerald-400">${inc.containmentActionsJson || 'NtSuspendProcess, WFP Ephemeral Quarantine'}</span></div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error("Failed fetching incidents:", err);
+            }
+        }
+
+        // Endpoint Actions
+        async function isolateEndpoint(id) {
+            if (!confirm("Confirm immediate WFP Network Isolation for this endpoint?")) return;
+            await fetch(`${API_BASE}/api/v1/endpoints/${id}/isolate`, { method: 'POST' });
+            fetchEndpoints();
+        }
+
+        async function releaseEndpoint(id) {
+            if (!confirm("Lift network quarantine for this endpoint?")) return;
+            await fetch(`${API_BASE}/api/v1/endpoints/${id}/release`, { method: 'POST' });
+            fetchEndpoints();
+        }
+
+        // Policy Actions
+        async function fetchPolicy() {
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/policies/tenant_default`);
+                const pol = await res.json();
+                document.getElementById('polCanaryEnabled').checked = pol.canaryTripwiresEnabled;
+                document.getElementById('polWfpEnabled').checked = pol.wfpQuarantineEnabled;
+                document.getElementById('polDumpEnabled').checked = pol.captureMinidumpOnIncident;
+                document.getElementById('polBurstCount').value = pol.rapidBurstThresholdCount;
+                document.getElementById('burstThresholdVal').innerText = pol.rapidBurstThresholdCount;
+                document.getElementById('polBurstWindow').value = pol.rapidBurstWindowSeconds;
+                document.getElementById('burstWindowVal').innerText = pol.rapidBurstWindowSeconds + 's';
+            } catch (err) {
+                console.error("Failed loading policy:", err);
+            }
+        }
+
+        async function savePolicy(e) {
+            e.preventDefault();
+            const payload = {
+                tenantId: "tenant_default",
+                canaryTripwiresEnabled: document.getElementById('polCanaryEnabled').checked,
+                wfpQuarantineEnabled: document.getElementById('polWfpEnabled').checked,
+                captureMinidumpOnIncident: document.getElementById('polDumpEnabled').checked,
+                rapidBurstThresholdCount: parseInt(document.getElementById('polBurstCount').value),
+                rapidBurstWindowSeconds: parseInt(document.getElementById('polBurstWindow').value)
+            };
+
+            const res = await fetch(`${API_BASE}/api/v1/policies/tenant_default`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert("Policy successfully updated and broadcast to all connected fleet sensors!");
+            } else {
+                alert("Failed to save policy.");
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            initSignalR();
+            fetchEndpoints();
+            fetchIncidents();
+        });
+    </script>
+</body>
+</html>

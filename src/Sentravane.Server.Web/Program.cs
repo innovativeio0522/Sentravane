@@ -45,6 +45,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseRouting();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.MapControllers();
 app.MapHub<FleetHub>("/hubs/fleet");
 
