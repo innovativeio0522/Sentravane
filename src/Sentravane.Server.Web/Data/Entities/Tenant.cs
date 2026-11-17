@@ -18,8 +18,13 @@ public class Tenant
 
     public int UsedSeats { get; set; } = 0;
 
+    public bool IsActive { get; set; } = true;
+
+    public DateTime? LicenseExpiresAtUtc { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public List<Endpoint> Endpoints { get; set; } = [];
-}
 
+    public List<User> Users { get; set; } = [];
+}

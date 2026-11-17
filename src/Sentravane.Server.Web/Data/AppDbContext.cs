@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<FleetEndpoint> Endpoints => Set<FleetEndpoint>();
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<Policy> Policies => Set<Policy>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -21,6 +22,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<FleetEndpoint>()
             .HasIndex(e => new { e.TenantId, e.HardwareUuid })
+            .IsUnique();
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Email)
             .IsUnique();
     }
 }

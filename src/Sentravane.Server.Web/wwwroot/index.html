@@ -30,9 +30,9 @@
             </div>
             <div>
                 <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                    SENTRAVANE <span class="text-xs bg-cyan-950 text-cyan-400 border border-cyan-800/60 px-2 py-0.5 rounded font-mono font-medium">FLEET EDR</span>
+                    SENTRAVANE <span class="text-xs bg-cyan-950 text-cyan-400 border border-cyan-800/60 px-2 py-0.5 rounded font-mono font-medium">CONTROL PLANE</span>
                 </h1>
-                <p class="text-xs text-slate-400">Driverless Ransomware Containment & Incident Response</p>
+                <p class="text-xs text-slate-400">Driverless Ransomware Containment & Multi-Tenant Management</p>
             </div>
         </div>
 
@@ -40,7 +40,7 @@
             <!-- Sensor Fleet Connection Indicator -->
             <div id="fleetSensorStatus" class="flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800 transition">
                 <span id="sensorPulse" class="h-2 w-2 rounded-full bg-slate-500"></span>
-                <span class="text-slate-400 font-semibold" id="sensorStatusText">0 SENSORS ACTIVE</span>
+                <span class="text-slate-400 font-semibold" id="sensorStatusText">NO SENSORS INSTALLED</span>
             </div>
 
             <!-- Web Browser Live Stream WebSocket Indicator -->
@@ -49,13 +49,14 @@
                 <span class="text-slate-400 font-semibold" id="connText">CONNECTING...</span>
             </div>
 
-            <div class="text-xs text-slate-400 flex items-center gap-2">
-                <div>
-                    Tenant: <span id="tenantName" class="text-slate-200 font-mono font-medium">Unregistered</span>
-                    <span id="tenantSeats" class="text-[10px] text-slate-500 font-mono ml-1"></span>
+            <!-- User / Tenant Context -->
+            <div id="userContextArea" class="text-xs text-slate-400 flex items-center gap-3">
+                <div id="userInfoBadge" class="hidden">
+                    <span id="userRoleBadge" class="bg-cyan-950 text-cyan-400 border border-cyan-800 px-1.5 py-0.5 rounded font-mono uppercase text-[10px]"></span>
+                    <span id="userEmailSpan" class="font-medium text-slate-200 ml-1"></span>
                 </div>
-                <button onclick="promptRegisterTenant()" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 px-2 py-0.5 rounded transition">
-                    Configure
+                <button onclick="handleAuthAction()" id="authActionButton" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1 rounded transition">
+                    Sign In
                 </button>
             </div>
         </div>
@@ -68,7 +69,7 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm">
                 <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
-                    <span>TOTAL MONITORED</span>
+                    <span>ACTIVE ENDPOINTS</span>
                     <i class="fa-solid fa-laptop text-slate-500"></i>
                 </div>
                 <div class="text-2xl font-bold text-white mt-2" id="statEndpointsCount">0</div>
@@ -83,36 +84,33 @@
                     <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
                 </div>
                 <div class="text-2xl font-bold text-amber-400 mt-2" id="statIncidentsCount">0</div>
-                <div class="text-xs text-slate-400 mt-1">
-                    Canary touches & burst triggers
-                </div>
+                <div class="text-xs text-slate-400 mt-1">Canary & burst triggers</div>
             </div>
 
             <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm">
                 <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
-                    <span>QUARANTINED ENDPOINTS</span>
+                    <span>QUARANTINED</span>
                     <i class="fa-solid fa-network-wired text-red-500"></i>
                 </div>
                 <div class="text-2xl font-bold text-red-400 mt-2" id="statQuarantineCount">0</div>
-                <div class="text-xs text-red-400/80 mt-1">
-                    Dynamic WFP Outbound Severed
-                </div>
+                <div class="text-xs text-red-400/80 mt-1">WFP Ephemeral Isolation</div>
             </div>
 
             <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm">
                 <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
-                    <span>CANARY INTEGRITY</span>
-                    <i class="fa-solid fa-shield-virus text-cyan-400"></i>
+                    <span>ORGANIZATIONS</span>
+                    <i class="fa-solid fa-building text-cyan-400"></i>
                 </div>
-                <div class="text-2xl font-bold text-cyan-400 mt-2" id="statCanaryStatus">100%</div>
-                <div class="text-xs text-cyan-400/80 mt-1">
-                    Zero-Byte Honeypots Armed
-                </div>
+                <div class="text-2xl font-bold text-cyan-400 mt-2" id="statTenantsCount">0</div>
+                <div class="text-xs text-cyan-400/80 mt-1">Managed Customer Tenants</div>
             </div>
         </div>
 
         <!-- Navigation Tabs -->
         <div class="flex space-x-2 border-b border-slate-800 pb-2">
+            <button onclick="switchTab('superadmin')" id="tabBtnSuperadmin" class="hidden px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white flex items-center gap-2">
+                <i class="fa-solid fa-building-shield"></i> Organizations & Licensing
+            </button>
             <button onclick="switchTab('endpoints')" id="tabBtnEndpoints" class="px-4 py-2 text-sm font-semibold rounded-lg bg-cyan-600 text-white flex items-center gap-2">
                 <i class="fa-solid fa-desktop"></i> Endpoints
             </button>
@@ -120,11 +118,46 @@
                 <i class="fa-solid fa-biohazard"></i> Incidents & Forensics
             </button>
             <button onclick="switchTab('policy')" id="tabBtnPolicy" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 flex items-center gap-2">
-                <i class="fa-solid fa-sliders"></i> Fleet Policy Settings
+                <i class="fa-solid fa-sliders"></i> Security Policy
             </button>
         </div>
 
-        <!-- TAB 1: ENDPOINTS LIST -->
+        <!-- TAB: SUPER-ADMIN ORGANIZATIONS & LICENSING -->
+        <section id="tabSuperadmin" class="space-y-4 hidden">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">Tenant Provisioning & Seat Quotas</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Register customer companies, allocate license seats, and issue high-entropy enrollment tokens.</p>
+                </div>
+                <button onclick="openCreateTenantModal()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-lg shadow-indigo-600/20">
+                    <i class="fa-solid fa-plus"></i> New Organization
+                </button>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800 font-mono">
+                        <tr>
+                            <th class="px-6 py-3">Organization Name</th>
+                            <th class="px-6 py-3">Status</th>
+                            <th class="px-6 py-3">Seat Quota</th>
+                            <th class="px-6 py-3">Enrollment Token</th>
+                            <th class="px-6 py-3">License Expiration</th>
+                            <th class="px-6 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tenantsTableBody" class="divide-y divide-slate-800 font-mono text-xs">
+                        <tr>
+                            <td colspan="6" class="px-6 py-8 text-center text-slate-500 font-sans">
+                                Loading organizations...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TAB: ENDPOINTS LIST -->
         <section id="tabEndpoints" class="space-y-4">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Registered Windows Endpoints</h2>
@@ -155,7 +188,7 @@
             </div>
         </section>
 
-        <!-- TAB 2: INCIDENTS & FORENSICS -->
+        <!-- TAB: INCIDENTS & FORENSICS -->
         <section id="tabIncidents" class="space-y-4 hidden">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Live Security Alerts & Forensics</h2>
@@ -171,7 +204,7 @@
             </div>
         </section>
 
-        <!-- TAB 3: FLEET POLICY CONFIGURATION -->
+        <!-- TAB: FLEET POLICY CONFIGURATION -->
         <section id="tabPolicy" class="space-y-4 hidden">
             <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6 max-w-2xl">
                 <div>
@@ -212,7 +245,6 @@
                         <input type="range" id="polBurstCount" min="10" max="150" step="5" value="40" 
                             oninput="document.getElementById('burstThresholdVal').innerText = this.value"
                             class="w-full accent-cyan-500 cursor-pointer">
-                        <p class="text-xs text-slate-500">Number of file touches required within time window to trigger anomaly containment.</p>
                     </div>
 
                     <div class="space-y-2 p-3 bg-slate-950 rounded-lg border border-slate-800">
@@ -223,7 +255,6 @@
                         <input type="range" id="polBurstWindow" min="2" max="30" step="1" value="5" 
                             oninput="document.getElementById('burstWindowVal').innerText = this.value + 's'"
                             class="w-full accent-cyan-500 cursor-pointer">
-                        <p class="text-xs text-slate-500">Duration of in-memory sliding window for file modification rate tracking.</p>
                     </div>
 
                     <div class="pt-3">
@@ -237,9 +268,71 @@
 
     </main>
 
+    <!-- AUTHENTICATION / BOOTSTRAP MODAL -->
+    <div id="authModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-md w-full shadow-2xl space-y-5">
+            <div class="text-center space-y-1">
+                <div class="h-12 w-12 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center mx-auto text-white text-xl shadow-lg shadow-cyan-500/20">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <h3 id="authModalTitle" class="text-lg font-bold text-white">Sign In to Sentravane</h3>
+                <p id="authModalSubtitle" class="text-xs text-slate-400">Enter your credentials to access the security console.</p>
+            </div>
+
+            <form id="authForm" onsubmit="handleAuthSubmit(event)" class="space-y-4 text-sm">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Email Address</label>
+                    <input type="email" id="authEmail" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-cyan-500 font-mono text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Password</label>
+                    <input type="password" id="authPassword" required minlength="8" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-cyan-500 font-mono text-xs">
+                </div>
+                <div id="authError" class="text-xs text-red-400 hidden bg-red-950/50 p-2 rounded border border-red-900/50"></div>
+                <button type="submit" id="authSubmitButton" class="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded-lg shadow-lg shadow-cyan-600/20 transition">
+                    Sign In
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- CREATE TENANT MODAL -->
+    <div id="createTenantModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-md w-full shadow-2xl space-y-5">
+            <div>
+                <h3 class="text-base font-bold text-white">Provision New Customer Organization</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Define organization profile and maximum endpoint seat allocation.</p>
+            </div>
+            <form onsubmit="handleCreateTenantSubmit(event)" class="space-y-4 text-sm">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Organization Name</label>
+                    <input type="text" id="newTenantName" required placeholder="e.g. Wayne Enterprises" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Maximum Seat Quota</label>
+                    <input type="number" id="newTenantSeats" value="50" min="1" max="10000" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Initial Tenant Admin Email (Optional)</label>
+                    <input type="email" id="newTenantAdminEmail" placeholder="admin@customer.com" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Initial Admin Password (Optional)</label>
+                    <input type="password" id="newTenantAdminPassword" minlength="8" placeholder="••••••••" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeCreateTenantModal()" class="w-1/2 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold">Cancel</button>
+                    <button type="submit" class="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-600/20">Provision</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const API_BASE = window.location.origin;
         let connection = null;
+        let currentUser = null;
+        let requiresBootstrap = false;
 
         // Init SignalR Connection
         function initSignalR() {
@@ -255,7 +348,7 @@
                 badge.className = "flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-emerald-900/60 shadow-sm shadow-emerald-500/10";
                 pulse.className = "h-2 w-2 rounded-full bg-emerald-400 badge-pulse";
                 text.className = "text-emerald-400 font-semibold";
-                text.innerText = "WS CONNECTED";
+                text.innerText = "STREAM ONLINE";
             }
 
             function setReconnecting() {
@@ -278,86 +371,41 @@
                 text.innerText = "DISCONNECTED";
             }
 
-            connection.onreconnecting(() => {
-                console.warn("[SignalR] Reconnecting...");
-                setReconnecting();
-            });
-
+            connection.onreconnecting(() => setReconnecting());
             connection.onreconnected(() => {
-                console.log("[SignalR] Reconnected successfully.");
                 setConnected();
                 fetchEndpoints();
                 fetchIncidents();
             });
-
-            connection.onclose(() => {
-                console.error("[SignalR] Connection closed.");
-                setDisconnected();
-            });
+            connection.onclose(() => setDisconnected());
 
             connection.on("ReportIncident", (snapshot) => {
-                console.log("[SignalR] Real-time incident received:", snapshot);
                 fetchIncidents();
                 fetchEndpoints();
             });
 
-            connection.start()
-                .then(() => {
-                    setConnected();
-                })
-                .catch(err => {
-                    console.error("[SignalR] Initial connection failed:", err);
-                    setDisconnected();
-                });
-        }
-
-        // Fetch Dynamic Tenant Context
-        async function fetchTenantInfo() {
-            try {
-                const res = await fetch(`${API_BASE}/api/v1/tenant/current`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.registered) {
-                        document.getElementById('tenantName').innerText = data.name;
-                        document.getElementById('tenantSeats').innerText = `(${data.endpointsCount}/${data.maxSeats} seats)`;
-                    } else {
-                        document.getElementById('tenantName').innerText = "Not Registered";
-                        document.getElementById('tenantSeats').innerText = "(Click Configure)";
-                    }
-                }
-            } catch (err) {
-                console.error("Failed to load tenant info:", err);
-                document.getElementById('tenantName').innerText = "Unregistered";
-            }
-        }
-
-        async function promptRegisterTenant() {
-            const name = prompt("Enter your organization / corporation name:", "Acme Corp");
-            if (!name) return;
-            const res = await fetch(`${API_BASE}/api/v1/tenant/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name, maxSeats: 50 })
-            });
-            if (res.ok) {
-                fetchTenantInfo();
-            } else {
-                alert("Failed to register corporation.");
-            }
+            connection.start().then(setConnected).catch(setDisconnected);
         }
 
         // Tab Switching
         function switchTab(tab) {
-            ['endpoints', 'incidents', 'policy'].forEach(t => {
-                document.getElementById(`tab${capitalize(t)}`).classList.add('hidden');
-                document.getElementById(`tabBtn${capitalize(t)}`).className = 
-                    "px-4 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 flex items-center gap-2";
+            ['superadmin', 'endpoints', 'incidents', 'policy'].forEach(t => {
+                const sec = document.getElementById(`tab${capitalize(t)}`);
+                const btn = document.getElementById(`tabBtn${capitalize(t)}`);
+                if (sec) sec.classList.add('hidden');
+                if (btn) btn.className = "px-4 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 flex items-center gap-2";
             });
 
-            document.getElementById(`tab${capitalize(tab)}`).classList.remove('hidden');
-            document.getElementById(`tabBtn${capitalize(tab)}`).className = 
-                "px-4 py-2 text-sm font-semibold rounded-lg bg-cyan-600 text-white flex items-center gap-2";
+            const targetSec = document.getElementById(`tab${capitalize(tab)}`);
+            const targetBtn = document.getElementById(`tabBtn${capitalize(tab)}`);
+            if (targetSec) targetSec.classList.remove('hidden');
+            if (targetBtn) {
+                targetBtn.className = tab === 'superadmin' 
+                    ? "px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white flex items-center gap-2"
+                    : "px-4 py-2 text-sm font-semibold rounded-lg bg-cyan-600 text-white flex items-center gap-2";
+            }
 
+            if (tab === 'superadmin') fetchTenants();
             if (tab === 'endpoints') fetchEndpoints();
             if (tab === 'incidents') fetchIncidents();
             if (tab === 'policy') fetchPolicy();
@@ -365,15 +413,197 @@
 
         function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+        // Auth & Status Flow
+        async function checkAuthStatus() {
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/auth/status`);
+                const data = await res.json();
+                requiresBootstrap = data.requiresBootstrap;
+
+                if (requiresBootstrap) {
+                    showBootstrapModal();
+                    return;
+                }
+
+                if (data.isAuthenticated) {
+                    currentUser = data;
+                    document.getElementById('authActionButton').innerText = "Sign Out";
+                    document.getElementById('userInfoBadge').classList.remove('hidden');
+                    document.getElementById('userRoleBadge').innerText = data.role;
+                    document.getElementById('userEmailSpan').innerText = data.email;
+
+                    if (data.role === 'SuperAdmin') {
+                        document.getElementById('tabBtnSuperadmin').classList.remove('hidden');
+                        switchTab('superadmin');
+                    } else {
+                        switchTab('endpoints');
+                    }
+                } else {
+                    document.getElementById('authActionButton').innerText = "Sign In";
+                    document.getElementById('userInfoBadge').classList.add('hidden');
+                    document.getElementById('tabBtnSuperadmin').classList.add('hidden');
+                }
+            } catch (err) {
+                console.error("Auth check failed:", err);
+            }
+        }
+
+        function showBootstrapModal() {
+            document.getElementById('authModalTitle').innerText = "Platform SuperAdmin Bootstrap";
+            document.getElementById('authModalSubtitle').innerText = "No administrators exist. Create the primary Platform SuperAdmin account.";
+            document.getElementById('authSubmitButton').innerText = "Create SuperAdmin Account";
+            document.getElementById('authSubmitButton').className = "w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg shadow-lg shadow-indigo-600/20 transition";
+            document.getElementById('authModal').classList.remove('hidden');
+        }
+
+        function handleAuthAction() {
+            if (currentUser) {
+                fetch(`${API_BASE}/api/v1/auth/logout`, { method: 'POST' }).then(() => {
+                    currentUser = null;
+                    checkAuthStatus();
+                });
+            } else {
+                document.getElementById('authModalTitle').innerText = "Sign In to Sentravane";
+                document.getElementById('authModalSubtitle').innerText = "Enter your credentials to access the console.";
+                document.getElementById('authSubmitButton').innerText = "Sign In";
+                document.getElementById('authModal').classList.remove('hidden');
+            }
+        }
+
+        async function handleAuthSubmit(e) {
+            e.preventDefault();
+            const email = document.getElementById('authEmail').value;
+            const password = document.getElementById('authPassword').value;
+            const errDiv = document.getElementById('authError');
+            errDiv.classList.add('hidden');
+
+            const url = requiresBootstrap 
+                ? `${API_BASE}/api/v1/auth/bootstrap-superadmin`
+                : `${API_BASE}/api/v1/auth/login`;
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                if (res.ok) {
+                    document.getElementById('authModal').classList.add('hidden');
+                    checkAuthStatus();
+                } else {
+                    const err = await res.json();
+                    errDiv.innerText = err.message || "Authentication failed.";
+                    errDiv.classList.remove('hidden');
+                }
+            } catch (err) {
+                errDiv.innerText = "Network error. Please try again.";
+                errDiv.classList.remove('hidden');
+            }
+        }
+
+        // Tenants SuperAdmin API
+        async function fetchTenants() {
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/admin/tenants`);
+                if (!res.ok) return;
+                const tenants = await res.json();
+                document.getElementById('statTenantsCount').innerText = tenants.length;
+                const tbody = document.getElementById('tenantsTableBody');
+
+                if (!tenants.length) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-slate-500 font-sans">No organizations provisioned. Click "+ New Organization" to register your first customer.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = tenants.map(t => {
+                    const statusBadge = t.isActive 
+                        ? `<span class="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-semibold">ACTIVE</span>`
+                        : `<span class="bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded font-semibold">SUSPENDED</span>`;
+
+                    return `
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="px-6 py-4 font-semibold text-slate-200">${t.name}</td>
+                            <td class="px-6 py-4">${statusBadge}</td>
+                            <td class="px-6 py-4"><span class="text-cyan-400 font-bold">${t.usedSeats}</span> / ${t.maxSeats} seats</td>
+                            <td class="px-6 py-4 text-slate-400">
+                                <span class="bg-slate-950 px-2 py-1 rounded border border-slate-800">${t.enrollmentToken.substring(0, 18)}...</span>
+                                <button onclick="rotateToken('${t.id}')" class="ml-1 text-slate-500 hover:text-cyan-400" title="Rotate Token"><i class="fa-solid fa-arrows-rotate"></i></button>
+                            </td>
+                            <td class="px-6 py-4 text-slate-400 font-sans">${t.licenseExpiresAtUtc ? new Date(t.licenseExpiresAtUtc).toLocaleDateString() : 'Perpetual'}</td>
+                            <td class="px-6 py-4 text-right space-x-2">
+                                <button onclick="toggleTenantStatus('${t.id}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-sans text-xs">
+                                    ${t.isActive ? 'Suspend' : 'Activate'}
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error("Failed fetching tenants:", err);
+            }
+        }
+
+        function openCreateTenantModal() {
+            document.getElementById('createTenantModal').classList.remove('hidden');
+        }
+        function closeCreateTenantModal() {
+            document.getElementById('createTenantModal').classList.add('hidden');
+        }
+
+        async function handleCreateTenantSubmit(e) {
+            e.preventDefault();
+            const payload = {
+                name: document.getElementById('newTenantName').value,
+                maxSeats: parseInt(document.getElementById('newTenantSeats').value),
+                adminEmail: document.getElementById('newTenantAdminEmail').value,
+                adminPassword: document.getElementById('newTenantAdminPassword').value
+            };
+
+            const res = await fetch(`${API_BASE}/api/v1/admin/tenants`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                alert(`Organization "${data.name}" provisioned!\n\nEnrollment Token: ${data.enrollmentToken}\n(Save this token for your sensor installers)`);
+                closeCreateTenantModal();
+                fetchTenants();
+            } else {
+                alert("Failed to provision organization.");
+            }
+        }
+
+        async function rotateToken(tenantId) {
+            if (!confirm("Rotate enrollment token? Existing sensor deployment scripts will need the new token.")) return;
+            const res = await fetch(`${API_BASE}/api/v1/admin/tenants/${tenantId}/rotate-token`, { method: 'POST' });
+            if (res.ok) {
+                const data = await res.json();
+                alert(`New Token Generated:\n${data.enrollmentToken}`);
+                fetchTenants();
+            }
+        }
+
+        async function toggleTenantStatus(tenantId) {
+            await fetch(`${API_BASE}/api/v1/admin/tenants/${tenantId}/toggle-status`, { method: 'POST' });
+            fetchTenants();
+        }
+
         // Fetch Endpoints
         async function fetchEndpoints() {
             try {
                 const res = await fetch(`${API_BASE}/api/v1/endpoints`);
+                if (!res.ok) return;
                 const endpoints = await res.json();
                 const tbody = document.getElementById('endpointsTableBody');
                 document.getElementById('statEndpointsCount').innerText = endpoints.length;
 
-                // Update Sensor Fleet Status Indicator in Header
+                let quarantined = 0;
+                endpoints.forEach(e => { if (e.status === 3 || e.status === 'Quarantined') quarantined++; });
+                document.getElementById('statQuarantineCount').innerText = quarantined;
+
                 const sensorBadge = document.getElementById('fleetSensorStatus');
                 const sensorPulse = document.getElementById('sensorPulse');
                 const sensorText = document.getElementById('sensorStatusText');
@@ -390,12 +620,8 @@
                     sensorText.innerText = "NO SENSORS INSTALLED";
                 }
 
-                let quarantined = 0;
-                endpoints.forEach(e => { if (e.status === 3 || e.status === 'Quarantined') quarantined++; });
-                document.getElementById('statQuarantineCount').innerText = quarantined;
-
                 if (!endpoints.length) {
-                    tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 font-sans">No endpoints enrolled. Install sensor via install-sensor.ps1</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 font-sans">No endpoints enrolled. Run install-sensor.ps1 with an enrollment token.</td></tr>`;
                     return;
                 }
 
@@ -431,6 +657,7 @@
         async function fetchIncidents() {
             try {
                 const res = await fetch(`${API_BASE}/api/v1/incidents`);
+                if (!res.ok) return;
                 const incidents = await res.json();
                 document.getElementById('statIncidentsCount').innerText = incidents.length;
                 const container = document.getElementById('incidentsContainer');
@@ -489,6 +716,7 @@
         async function fetchPolicy() {
             try {
                 const res = await fetch(`${API_BASE}/api/v1/policies/tenant_default`);
+                if (!res.ok) return;
                 const pol = await res.json();
                 document.getElementById('polCanaryEnabled').checked = pol.canaryTripwiresEnabled;
                 document.getElementById('polWfpEnabled').checked = pol.wfpQuarantineEnabled;
@@ -529,7 +757,7 @@
         // Initialize on load
         window.addEventListener('DOMContentLoaded', () => {
             initSignalR();
-            fetchTenantInfo();
+            checkAuthStatus();
             fetchEndpoints();
             fetchIncidents();
         });
