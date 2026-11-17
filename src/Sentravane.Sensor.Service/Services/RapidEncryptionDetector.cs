@@ -24,9 +24,20 @@ public class RapidEncryptionDetector : IRapidEncryptionDetector
 
     public event EventHandler<RapidEncryptionAlert>? EncryptionAnomalyDetected;
 
-    public RapidEncryptionDetector(ILogger<RapidEncryptionDetector> logger)
+    public RapidEncryptionDetector(ILogger<RapidEncryptionDetector> logger, Microsoft.Extensions.Configuration.IConfiguration? config = null)
     {
         _logger = logger;
+        if (config != null)
+        {
+            if (int.TryParse(config["Sentravane:RapidBurstThresholdCount"], out var threshold) && threshold > 0)
+            {
+                ThresholdModificationCount = threshold;
+            }
+            if (int.TryParse(config["Sentravane:RapidBurstWindowSeconds"], out var seconds) && seconds > 0)
+            {
+                WindowDuration = TimeSpan.FromSeconds(seconds);
+            }
+        }
     }
 
     public void RecordFileModification(int pid, string processName, string filePath)

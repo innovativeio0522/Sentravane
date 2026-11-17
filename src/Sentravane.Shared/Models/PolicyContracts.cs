@@ -10,7 +10,12 @@ public record UsbWhitelistEntry
 
 public record EndpointPolicy
 {
-    public bool UsbEnforcementEnabled { get; init; } = true;
+    public bool CanaryTripwiresEnabled { get; init; } = true;
+    public bool WfpQuarantineEnabled { get; init; } = true;
+    public int RapidBurstThresholdCount { get; init; } = 40;
+    public int RapidBurstWindowSeconds { get; init; } = 5;
+    public bool CaptureMinidumpOnIncident { get; init; } = true;
+    public bool UsbEnforcementEnabled { get; init; } = false;
     public List<UsbWhitelistEntry> UsbWhitelist { get; init; } = [];
     public int OverrideTimeoutSeconds { get; init; } = 20;
     public List<string> CanaryRelativePaths { get; init; } =
@@ -20,4 +25,3 @@ public record EndpointPolicy
         "AppData\\!00_sentravane_canary.pdf"
     ];
 }
-

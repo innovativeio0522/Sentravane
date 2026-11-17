@@ -28,6 +28,7 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
     private readonly ICorrelationEngine _correlationEngine;
     private readonly IContainmentService _containmentService;
     private readonly ILocalStoreService _localStore;
+    private readonly IRapidEncryptionDetector _rapidDetector;
     private HubConnection? _hubConnection;
     private string _endpointId = string.Empty;
 
@@ -39,13 +40,15 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
         IConfiguration config,
         ICorrelationEngine correlationEngine,
         IContainmentService containmentService,
-        ILocalStoreService localStore)
+        ILocalStoreService localStore,
+        IRapidEncryptionDetector rapidDetector)
     {
         _logger = logger;
         _config = config;
         _correlationEngine = correlationEngine;
         _containmentService = containmentService;
         _localStore = localStore;
+        _rapidDetector = rapidDetector;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -79,6 +82,18 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
         {
             _logger.LogInformation("Received LiftQuarantine command from Fleet Hub");
             _containmentService.RestoreEndpointNetwork();
+        });
+
+        _hubConnection.On<EndpointPolicy>("UpdatePolicy", policy =>
+        {
+            _logger.LogInformation("Received dynamic Policy update from Fleet Hub: BurstThreshold={Threshold}, BurstWindow={Window}s",
+                policy.RapidBurstThresholdCount, policy.RapidBurstWindowSeconds);
+
+            if (_rapidDetector is RapidEncryptionDetector detector)
+            {
+                detector.ThresholdModificationCount = policy.RapidBurstThresholdCount;
+                detector.WindowDuration = TimeSpan.FromSeconds(policy.RapidBurstWindowSeconds);
+            }
         });
 
         _correlationEngine.IncidentDetected += async (_, snapshot) =>
