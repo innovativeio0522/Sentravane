@@ -24,24 +24,11 @@ builder.Services.AddSignalR();
 
 var app = builder.Build();
 
-// Ensure DB is created and seed a default test tenant
+// Ensure DB schema is created
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
-
-    if (!db.Tenants.Any())
-    {
-        db.Tenants.Add(new Tenant
-        {
-            Id = "tenant_default",
-            Name = "Acme Security Corp",
-            EnrollmentToken = "sentra_enroll_demo_token_12345",
-            MaxSeats = 50,
-            UsedSeats = 0
-        });
-        db.SaveChanges();
-    }
 }
 
 app.UseRouting();

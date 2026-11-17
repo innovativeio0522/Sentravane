@@ -37,13 +37,26 @@
         </div>
 
         <div class="flex items-center space-x-6">
-            <div id="connectionStatus" class="flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800 transition">
-                <span id="connPulse" class="h-2 w-2 rounded-full bg-emerald-400 badge-pulse"></span>
-                <span class="text-emerald-400 font-semibold" id="connText">WS CONNECTED</span>
+            <!-- Sensor Fleet Connection Indicator -->
+            <div id="fleetSensorStatus" class="flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800 transition">
+                <span id="sensorPulse" class="h-2 w-2 rounded-full bg-slate-500"></span>
+                <span class="text-slate-400 font-semibold" id="sensorStatusText">0 SENSORS ACTIVE</span>
             </div>
-            <div class="text-xs text-slate-400">
-                Tenant: <span id="tenantName" class="text-slate-200 font-mono font-medium">Loading...</span>
-                <span id="tenantSeats" class="text-[10px] text-slate-500 font-mono ml-1"></span>
+
+            <!-- Web Browser Live Stream WebSocket Indicator -->
+            <div id="connectionStatus" class="flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800 transition">
+                <span id="connPulse" class="h-2 w-2 rounded-full bg-slate-500"></span>
+                <span class="text-slate-400 font-semibold" id="connText">CONNECTING...</span>
+            </div>
+
+            <div class="text-xs text-slate-400 flex items-center gap-2">
+                <div>
+                    Tenant: <span id="tenantName" class="text-slate-200 font-mono font-medium">Unregistered</span>
+                    <span id="tenantSeats" class="text-[10px] text-slate-500 font-mono ml-1"></span>
+                </div>
+                <button onclick="promptRegisterTenant()" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 px-2 py-0.5 rounded transition">
+                    Configure
+                </button>
             </div>
         </div>
     </header>
@@ -304,12 +317,32 @@
                 const res = await fetch(`${API_BASE}/api/v1/tenant/current`);
                 if (res.ok) {
                     const data = await res.json();
-                    document.getElementById('tenantName').innerText = data.name;
-                    document.getElementById('tenantSeats').innerText = `(${data.endpointsCount}/${data.maxSeats} seats)`;
+                    if (data.registered) {
+                        document.getElementById('tenantName').innerText = data.name;
+                        document.getElementById('tenantSeats').innerText = `(${data.endpointsCount}/${data.maxSeats} seats)`;
+                    } else {
+                        document.getElementById('tenantName').innerText = "Not Registered";
+                        document.getElementById('tenantSeats').innerText = "(Click Configure)";
+                    }
                 }
             } catch (err) {
                 console.error("Failed to load tenant info:", err);
-                document.getElementById('tenantName').innerText = "Default Tenant";
+                document.getElementById('tenantName').innerText = "Unregistered";
+            }
+        }
+
+        async function promptRegisterTenant() {
+            const name = prompt("Enter your organization / corporation name:", "Acme Corp");
+            if (!name) return;
+            const res = await fetch(`${API_BASE}/api/v1/tenant/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, maxSeats: 50 })
+            });
+            if (res.ok) {
+                fetchTenantInfo();
+            } else {
+                alert("Failed to register corporation.");
             }
         }
 
@@ -339,6 +372,23 @@
                 const endpoints = await res.json();
                 const tbody = document.getElementById('endpointsTableBody');
                 document.getElementById('statEndpointsCount').innerText = endpoints.length;
+
+                // Update Sensor Fleet Status Indicator in Header
+                const sensorBadge = document.getElementById('fleetSensorStatus');
+                const sensorPulse = document.getElementById('sensorPulse');
+                const sensorText = document.getElementById('sensorStatusText');
+
+                if (endpoints.length > 0) {
+                    sensorBadge.className = "flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-cyan-800/60 shadow-sm shadow-cyan-500/10";
+                    sensorPulse.className = "h-2 w-2 rounded-full bg-cyan-400 badge-pulse";
+                    sensorText.className = "text-cyan-400 font-semibold";
+                    sensorText.innerText = `${endpoints.length} SENSOR${endpoints.length > 1 ? 'S' : ''} ACTIVE`;
+                } else {
+                    sensorBadge.className = "flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800";
+                    sensorPulse.className = "h-2 w-2 rounded-full bg-slate-500";
+                    sensorText.className = "text-slate-400 font-semibold";
+                    sensorText.innerText = "NO SENSORS INSTALLED";
+                }
 
                 let quarantined = 0;
                 endpoints.forEach(e => { if (e.status === 3 || e.status === 'Quarantined') quarantined++; });
