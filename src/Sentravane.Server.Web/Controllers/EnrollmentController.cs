@@ -10,6 +10,7 @@ namespace Sentravane.Server.Web.Controllers;
 
 [ApiController]
 [Route("api/v1/fleet")]
+[Route("api/v1/enrollment")]
 public class EnrollmentController(
     AppDbContext dbContext,
     LicenseManager licenseManager,
@@ -62,12 +63,16 @@ public class EnrollmentController(
         await dbContext.SaveChangesAsync();
         logger.LogInformation("Enrolled endpoint {EndpointId} for tenant {TenantId}", endpointId, tenant.Id);
 
+        var wsUrl = Request != null 
+            ? $"{Request.Scheme}://{Request.Host}/hubs/fleet" 
+            : "http://localhost:5000/hubs/fleet";
+
         var response = new EnrollmentResponse
         {
             EndpointId = endpointId,
             TenantId = tenant.Id,
             AgentSecret = agentSecret,
-            WebSocketUrl = $"{Request.Scheme}://{Request.Host}/hubs/fleet",
+            WebSocketUrl = wsUrl,
             HeartbeatIntervalSeconds = 30,
             Policies = new EndpointPolicy
             {

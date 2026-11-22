@@ -31,6 +31,7 @@ public class SuperAdminController(
                 UsedSeats = t.Endpoints.Count,
                 t.IsActive,
                 t.LicenseExpiresAtUtc,
+                t.WebhookUrl,
                 t.CreatedAtUtc
             })
             .ToListAsync();
@@ -59,7 +60,8 @@ public class SuperAdminController(
             MaxSeats = dto.MaxSeats > 0 ? dto.MaxSeats : 50,
             UsedSeats = 0,
             IsActive = true,
-            LicenseExpiresAtUtc = dto.LicenseDays > 0 ? DateTime.UtcNow.AddDays(dto.LicenseDays) : null
+            LicenseExpiresAtUtc = dto.LicenseDays > 0 ? DateTime.UtcNow.AddDays(dto.LicenseDays) : null,
+            WebhookUrl = string.IsNullOrWhiteSpace(dto.WebhookUrl) ? null : dto.WebhookUrl.Trim()
         };
 
         dbContext.Tenants.Add(tenant);
@@ -153,6 +155,23 @@ public class SuperAdminController(
             tenant.IsActive
         });
     }
+
+    [HttpPut("{tenantId}/webhook")]
+    public async Task<IActionResult> UpdateWebhook(string tenantId, [FromBody] UpdateWebhookDto dto)
+    {
+        var tenant = await dbContext.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId);
+        if (tenant == null) return NotFound(new { message = "Organization not found." });
+
+        tenant.WebhookUrl = string.IsNullOrWhiteSpace(dto.WebhookUrl) ? null : dto.WebhookUrl.Trim();
+        await dbContext.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Webhook configuration updated successfully.",
+            tenant.Id,
+            tenant.WebhookUrl
+        });
+    }
 }
 
 public record CreateTenantRequestDto(
@@ -161,6 +180,9 @@ public record CreateTenantRequestDto(
     int TokenValidityDays = 30,
     int LicenseDays = 365,
     string? AdminEmail = null,
-    string? AdminPassword = null);
+    string? AdminPassword = null,
+    string? WebhookUrl = null);
 
 public record UpdateLicenseDto(int MaxSeats, int? ExtendDays);
+
+public record UpdateWebhookDto(string? WebhookUrl);

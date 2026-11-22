@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  sentravane-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sentravane-server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - sentravane_data:/data
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000
+      - ConnectionStrings__DefaultConnection=Data Source=/data/sentravane_fleet.db
+
+volumes:
+  sentravane_data:
+    driver: local

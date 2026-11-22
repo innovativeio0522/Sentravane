@@ -320,6 +320,10 @@
                     <label class="block text-xs font-medium text-slate-300 mb-1">Initial Admin Password (Optional)</label>
                     <input type="password" id="newTenantAdminPassword" minlength="8" placeholder="••••••••" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono text-xs">
                 </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">SIEM / Slack Webhook URL (Optional)</label>
+                    <input type="url" id="newTenantWebhookUrl" placeholder="https://hooks.slack.com/services/..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                </div>
                 <div class="flex gap-2 pt-2">
                     <button type="button" onclick="closeCreateTenantModal()" class="w-1/2 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold">Cancel</button>
                     <button type="submit" class="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-600/20">Provision</button>
@@ -523,7 +527,10 @@
 
                     return `
                         <tr class="hover:bg-slate-800/40 transition">
-                            <td class="px-6 py-4 font-semibold text-slate-200">${t.name}</td>
+                            <td class="px-6 py-4 font-semibold text-slate-200">
+                                <div>${t.name}</div>
+                                ${t.webhookUrl ? `<div class="text-[10px] text-emerald-400 mt-0.5 flex items-center gap-1 font-mono" title="${t.webhookUrl}"><i class="fa-solid fa-bell"></i> SIEM Webhook Active</div>` : ''}
+                            </td>
                             <td class="px-6 py-4">${statusBadge}</td>
                             <td class="px-6 py-4"><span class="text-cyan-400 font-bold">${t.usedSeats}</span> / ${t.maxSeats} seats</td>
                             <td class="px-6 py-4 text-slate-400">
@@ -557,7 +564,8 @@
                 name: document.getElementById('newTenantName').value,
                 maxSeats: parseInt(document.getElementById('newTenantSeats').value),
                 adminEmail: document.getElementById('newTenantAdminEmail').value,
-                adminPassword: document.getElementById('newTenantAdminPassword').value
+                adminPassword: document.getElementById('newTenantAdminPassword').value,
+                webhookUrl: document.getElementById('newTenantWebhookUrl').value
             };
 
             const res = await fetch(`${API_BASE}/api/v1/admin/tenants`, {

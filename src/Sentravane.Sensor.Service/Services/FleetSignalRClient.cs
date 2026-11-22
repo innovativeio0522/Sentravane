@@ -31,8 +31,10 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
     private readonly IRapidEncryptionDetector _rapidDetector;
     private HubConnection? _hubConnection;
     private string _endpointId = string.Empty;
+    private string _agentSecret = string.Empty;
 
     public string EndpointId => _endpointId;
+    public string AgentSecret => _agentSecret;
     public bool IsConnected => _hubConnection?.State == HubConnectionState.Connected;
 
     public FleetSignalRClient(
@@ -62,6 +64,10 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
             .WithUrl($"{serverUrl}/hubs/fleet", options =>
             {
                 options.Headers.Add("X-Endpoint-Id", _endpointId);
+                if (!string.IsNullOrEmpty(_agentSecret))
+                {
+                    options.Headers.Add("X-Agent-Secret", _agentSecret);
+                }
             })
             .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15) })
             .Build();
@@ -164,13 +170,15 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
     private async Task EnsureEnrolledAsync(string serverUrl, string enrollmentToken)
     {
         var idPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Sentravane", "endpoint.id");
+        var secretPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Sentravane", "agent.secret");
         if (File.Exists(idPath))
         {
             var existingId = await File.ReadAllTextAsync(idPath);
             if (!string.IsNullOrWhiteSpace(existingId))
             {
                 _endpointId = existingId.Trim();
-                _logger.LogInformation("Loaded existing Endpoint ID: {Id}", _endpointId);
+                _agentSecret = LoadProtectedSecret(secretPath) ?? string.Empty;
+                _logger.LogInformation("Loaded existing Endpoint ID: {Id} (HasSecret: {HasSecret})", _endpointId, !string.IsNullOrEmpty(_agentSecret));
                 return;
             }
         }
@@ -188,15 +196,26 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
                 SensorVersion = "1.0.0"
             };
 
-            var resp = await http.PostAsJsonAsync($"{serverUrl}/api/v1/enrollment/enroll", req);
+            // Attempt enrollment on /api/v1/fleet/enroll, falling back to /api/v1/enrollment/enroll
+            var resp = await http.PostAsJsonAsync($"{serverUrl}/api/v1/fleet/enroll", req);
+            if (!resp.IsSuccessStatusCode)
+            {
+                resp = await http.PostAsJsonAsync($"{serverUrl}/api/v1/enrollment/enroll", req);
+            }
+
             if (resp.IsSuccessStatusCode)
             {
                 var enrolled = await resp.Content.ReadFromJsonAsync<EnrollmentResponse>();
                 if (enrolled != null)
                 {
                     _endpointId = enrolled.EndpointId;
+                    _agentSecret = enrolled.AgentSecret;
                     Directory.CreateDirectory(Path.GetDirectoryName(idPath)!);
                     await File.WriteAllTextAsync(idPath, _endpointId);
+                    if (!string.IsNullOrEmpty(_agentSecret))
+                    {
+                        SaveProtectedSecret(secretPath, _agentSecret);
+                    }
                     _logger.LogInformation("Endpoint successfully enrolled with ID {Id}", _endpointId);
                     return;
                 }
@@ -210,6 +229,53 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
         _endpointId = Guid.NewGuid().ToString("N");
         Directory.CreateDirectory(Path.GetDirectoryName(idPath)!);
         await File.WriteAllTextAsync(idPath, _endpointId);
+    }
+
+    private static void SaveProtectedSecret(string filePath, string secret)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                var bytes = System.Text.Encoding.UTF8.GetBytes(secret);
+                var encrypted = System.Security.Cryptography.ProtectedData.Protect(
+                    bytes, null, System.Security.Cryptography.DataProtectionScope.LocalMachine);
+                File.WriteAllBytes(filePath, encrypted);
+                return;
+            }
+        }
+        catch
+        {
+            // Fallback to plain if DPAPI is unavailable
+        }
+        File.WriteAllText(filePath, secret);
+    }
+
+    private static string? LoadProtectedSecret(string filePath)
+    {
+        if (!File.Exists(filePath)) return null;
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                var bytes = File.ReadAllBytes(filePath);
+                try
+                {
+                    var decrypted = System.Security.Cryptography.ProtectedData.Unprotect(
+                        bytes, null, System.Security.Cryptography.DataProtectionScope.LocalMachine);
+                    return System.Text.Encoding.UTF8.GetString(decrypted).Trim();
+                }
+                catch
+                {
+                    return System.Text.Encoding.UTF8.GetString(bytes).Trim();
+                }
+            }
+            return File.ReadAllText(filePath).Trim();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task StopAsync()
