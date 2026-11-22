@@ -22,6 +22,8 @@ public class Tenant
 
     public DateTime? LicenseExpiresAtUtc { get; set; }
 
+    public string? WebhookUrl { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public List<Endpoint> Endpoints { get; set; } = [];

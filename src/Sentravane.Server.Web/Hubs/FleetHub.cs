@@ -21,20 +21,37 @@ public class FleetHub(
     public override async Task OnConnectedAsync()
     {
         var httpContext = Context.GetHttpContext();
-        var endpointId = httpContext?.Request.Headers["X-Endpoint-ID"].FirstOrDefault();
+        var endpointId = httpContext?.Request.Headers["X-Endpoint-Id"].FirstOrDefault()
+            ?? httpContext?.Request.Headers["X-Endpoint-ID"].FirstOrDefault();
+        var agentSecret = httpContext?.Request.Headers["X-Agent-Secret"].FirstOrDefault();
 
         if (!string.IsNullOrEmpty(endpointId))
         {
-            ConnectionMap[Context.ConnectionId] = endpointId;
             var endpoint = await dbContext.Endpoints.FindAsync(endpointId);
-            if (endpoint != null)
+            if (endpoint == null)
             {
-                endpoint.CurrentConnectionId = Context.ConnectionId;
-                endpoint.Status = EndpointStatus.Online;
-                endpoint.LastHeartbeatUtc = DateTime.UtcNow;
-                await dbContext.SaveChangesAsync();
-                logger.LogInformation("Endpoint {EndpointId} connected with socket {ConnectionId}", endpointId, Context.ConnectionId);
+                logger.LogWarning("Rejecting SignalR connection: Unknown endpoint {EndpointId}", endpointId);
+                Context.Abort();
+                return;
             }
+
+            // Verify AgentSecretHash if configured on the endpoint
+            if (!string.IsNullOrEmpty(endpoint.AgentSecretHash))
+            {
+                if (string.IsNullOrEmpty(agentSecret) || !VerifySecret(agentSecret, endpoint.AgentSecretHash))
+                {
+                    logger.LogWarning("Rejecting SignalR connection: Invalid or missing agent secret for endpoint {EndpointId}", endpointId);
+                    Context.Abort();
+                    return;
+                }
+            }
+
+            ConnectionMap[Context.ConnectionId] = endpointId;
+            endpoint.CurrentConnectionId = Context.ConnectionId;
+            endpoint.Status = EndpointStatus.Online;
+            endpoint.LastHeartbeatUtc = DateTime.UtcNow;
+            await dbContext.SaveChangesAsync();
+            logger.LogInformation("Endpoint {EndpointId} connected with socket {ConnectionId}", endpointId, Context.ConnectionId);
         }
 
         await base.OnConnectedAsync();
@@ -99,8 +116,21 @@ public class FleetHub(
 
         await dbContext.SaveChangesAsync();
 
-        // Dispatch background webhook alert
-        _ = webhookDispatcher.BroadcastIncidentAsync("https://hooks.slack.com/services/sentravane-demo-alert", snapshot);
+        // Dispatch background webhook alert to tenant-configured webhook or fallback
+        var tenant = endpoint != null ? await dbContext.Tenants.FindAsync(endpoint.TenantId) : null;
+        var webhookUrl = tenant?.WebhookUrl;
+        if (!string.IsNullOrWhiteSpace(webhookUrl))
+        {
+            _ = webhookDispatcher.BroadcastIncidentAsync(webhookUrl, snapshot);
+        }
+    }
+
+    private static bool VerifySecret(string secret, string expectedHash)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(secret);
+        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        var actualHash = Convert.ToHexString(hash);
+        return string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase);
     }
 
     public Task ReportUsbEvent(string serialNumber, bool isAuthorized, string actionTaken)
