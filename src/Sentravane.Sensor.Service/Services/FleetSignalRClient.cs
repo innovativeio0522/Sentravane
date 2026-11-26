@@ -189,8 +189,8 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
             var req = new EnrollmentRequest
             {
                 EnrollmentToken = enrollmentToken,
-                HardwareUuid = Environment.MachineName,
-                MacAddress = "00:15:5D:00:01:02",
+                HardwareUuid = GetHardwareUuid(),
+                MacAddress = GetPrimaryMacAddress(),
                 Hostname = Environment.MachineName,
                 OsVersion = Environment.OSVersion.VersionString,
                 SensorVersion = "1.0.0"
@@ -276,6 +276,50 @@ public class FleetSignalRClient : IFleetSignalRClient, IAsyncDisposable
         {
             return null;
         }
+    }
+
+    private static string GetHardwareUuid()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography");
+                var machineGuid = key?.GetValue("MachineGuid")?.ToString();
+                if (!string.IsNullOrWhiteSpace(machineGuid))
+                {
+                    return machineGuid.Trim();
+                }
+            }
+        }
+        catch
+        {
+            // Fallback to machine name if registry read fails
+        }
+        return Environment.MachineName;
+    }
+
+    private static string GetPrimaryMacAddress()
+    {
+        try
+        {
+            var nic = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .FirstOrDefault(n =>
+                    n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
+                    n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback &&
+                    n.GetPhysicalAddress().GetAddressBytes().Length == 6);
+
+            if (nic != null)
+            {
+                var bytes = nic.GetPhysicalAddress().GetAddressBytes();
+                return string.Join(":", bytes.Select(b => b.ToString("X2")));
+            }
+        }
+        catch
+        {
+            // Fallback if NIC enumeration fails
+        }
+        return "00:00:00:00:00:00";
     }
 
     public async Task StopAsync()

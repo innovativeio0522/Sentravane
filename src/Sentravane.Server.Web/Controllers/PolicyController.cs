@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +14,7 @@ namespace Sentravane.Server.Web.Controllers;
 
 [ApiController]
 [Route("api/v1/policies")]
+[Authorize]
 public class PolicyController(
     AppDbContext dbContext,
     IHubContext<FleetHub, IFleetHubClient> hubContext) : ControllerBase
@@ -19,6 +22,11 @@ public class PolicyController(
     [HttpGet("{tenantId}")]
     public async Task<IActionResult> GetPolicy(string tenantId)
     {
+        if (!User.IsInRole("SuperAdmin") && tenantId != User.FindFirstValue("TenantId"))
+        {
+            return Forbid();
+        }
+
         var policy = await dbContext.Policies.FirstOrDefaultAsync(p => p.TenantId == tenantId);
         if (policy == null)
         {
@@ -33,6 +41,11 @@ public class PolicyController(
     [HttpPost("{tenantId}")]
     public async Task<IActionResult> UpdatePolicy(string tenantId, [FromBody] Policy updated)
     {
+        if (!User.IsInRole("SuperAdmin") && tenantId != User.FindFirstValue("TenantId"))
+        {
+            return Forbid();
+        }
+
         var policy = await dbContext.Policies.FirstOrDefaultAsync(p => p.TenantId == tenantId);
         if (policy == null)
         {

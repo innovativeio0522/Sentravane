@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +12,7 @@ namespace Sentravane.Server.Web.Controllers;
 
 [ApiController]
 [Route("api/v1/endpoints")]
+[Authorize]
 public class EndpointsController(
     AppDbContext dbContext,
     IHubContext<FleetHub, IFleetHubClient> hubContext) : ControllerBase
@@ -18,7 +21,14 @@ public class EndpointsController(
     public async Task<IActionResult> ListEndpoints([FromQuery] string? tenantId)
     {
         var query = dbContext.Endpoints.AsQueryable();
-        if (!string.IsNullOrEmpty(tenantId))
+
+        if (!User.IsInRole("SuperAdmin"))
+        {
+            var callerTenantId = User.FindFirstValue("TenantId");
+            if (string.IsNullOrEmpty(callerTenantId)) return Forbid();
+            query = query.Where(e => e.TenantId == callerTenantId);
+        }
+        else if (!string.IsNullOrEmpty(tenantId))
         {
             query = query.Where(e => e.TenantId == tenantId);
         }
@@ -32,6 +42,11 @@ public class EndpointsController(
     {
         var ep = await dbContext.Endpoints.FirstOrDefaultAsync(e => e.Id == endpointId);
         if (ep == null) return NotFound(new { message = "Endpoint not found" });
+
+        if (!User.IsInRole("SuperAdmin") && ep.TenantId != User.FindFirstValue("TenantId"))
+        {
+            return Forbid();
+        }
 
         ep.Status = EndpointStatus.Quarantined;
         await dbContext.SaveChangesAsync();
@@ -49,6 +64,11 @@ public class EndpointsController(
     {
         var ep = await dbContext.Endpoints.FirstOrDefaultAsync(e => e.Id == endpointId);
         if (ep == null) return NotFound(new { message = "Endpoint not found" });
+
+        if (!User.IsInRole("SuperAdmin") && ep.TenantId != User.FindFirstValue("TenantId"))
+        {
+            return Forbid();
+        }
 
         ep.Status = EndpointStatus.Online;
         await dbContext.SaveChangesAsync();

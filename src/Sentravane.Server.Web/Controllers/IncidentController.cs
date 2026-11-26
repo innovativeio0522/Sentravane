@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +12,7 @@ namespace Sentravane.Server.Web.Controllers;
 
 [ApiController]
 [Route("api/v1/incidents")]
+[Authorize]
 public class IncidentController(
     AppDbContext dbContext,
     IHubContext<FleetHub, IFleetHubClient> hubContext) : ControllerBase
@@ -17,7 +20,15 @@ public class IncidentController(
     [HttpGet]
     public async Task<IActionResult> ListIncidents([FromQuery] string? endpointId)
     {
-        var query = dbContext.Incidents.AsQueryable();
+        var query = dbContext.Incidents.Include(i => i.Endpoint).AsQueryable();
+
+        if (!User.IsInRole("SuperAdmin"))
+        {
+            var callerTenantId = User.FindFirstValue("TenantId");
+            if (string.IsNullOrEmpty(callerTenantId)) return Forbid();
+            query = query.Where(i => i.Endpoint != null && i.Endpoint.TenantId == callerTenantId);
+        }
+
         if (!string.IsNullOrEmpty(endpointId))
         {
             query = query.Where(i => i.EndpointId == endpointId);
@@ -32,6 +43,11 @@ public class IncidentController(
     {
         var incident = await dbContext.Incidents.Include(i => i.Endpoint).FirstOrDefaultAsync(i => i.Id == incidentId);
         if (incident == null) return NotFound();
+
+        if (!User.IsInRole("SuperAdmin") && incident.Endpoint?.TenantId != User.FindFirstValue("TenantId"))
+        {
+            return Forbid();
+        }
 
         incident.IsResolved = true;
 

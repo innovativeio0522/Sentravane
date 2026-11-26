@@ -243,5 +243,91 @@ public class ServerIntegrationTests : IClassFixture<TestServerFixture>
 
         var createResp = await anonymousClient.PostAsJsonAsync("/api/v1/admin/tenants", new { name = "Unauthorized Corp" });
         Assert.Equal(HttpStatusCode.Unauthorized, createResp.StatusCode);
+
+        // Unauthenticated access to fleet routes must also yield 401 Unauthorized
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymousClient.GetAsync("/api/v1/endpoints")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymousClient.GetAsync("/api/v1/incidents")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymousClient.GetAsync("/api/v1/policies/any_tenant")).StatusCode);
+    }
+
+    [Fact]
+    public async Task TenantAdmin_CannotAccessOtherTenantResources()
+    {
+        using var isolatedFactory = new TestServerFixture();
+        var adminClient = isolatedFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        // Bootstrap SuperAdmin on isolated DB
+        var bootstrapResp = await adminClient.PostAsJsonAsync("/api/v1/auth/bootstrap-superadmin", new
+        {
+            email = "admin@sentravane.internal",
+            password = "EnterpriseSecurePassword123!"
+        });
+        Assert.Equal(HttpStatusCode.OK, bootstrapResp.StatusCode);
+
+        // Create Tenant A with a TenantAdmin
+        var respA = await adminClient.PostAsJsonAsync("/api/v1/admin/tenants", new
+        {
+            name = "Tenant Alpha",
+            maxSeats = 5,
+            adminEmail = "alpha@corp.test",
+            adminPassword = "AlphaPassword123!"
+        });
+        Assert.Equal(HttpStatusCode.OK, respA.StatusCode);
+        var tenantA = await respA.Content.ReadFromJsonAsync<JsonElement>();
+        string tenantAId = tenantA.GetProperty("id").GetString()!;
+
+        // Create Tenant B
+        var respB = await adminClient.PostAsJsonAsync("/api/v1/admin/tenants", new
+        {
+            name = "Tenant Beta",
+            maxSeats = 5
+        });
+        Assert.Equal(HttpStatusCode.OK, respB.StatusCode);
+        var tenantB = await respB.Content.ReadFromJsonAsync<JsonElement>();
+        string tenantBId = tenantB.GetProperty("id").GetString()!;
+        string tokenB = tenantB.GetProperty("enrollmentToken").GetString()!;
+
+        // Enroll an endpoint into Tenant B
+        var enrollB = await adminClient.PostAsJsonAsync("/api/v1/fleet/enroll", new EnrollmentRequest
+        {
+            EnrollmentToken = tokenB,
+            HardwareUuid = "HW-BETA-001",
+            Hostname = "BETA-PC-01",
+            MacAddress = "AA:BB:CC:DD:EE:FF",
+            OsVersion = "Windows 11",
+            SensorVersion = "1.0.0"
+        });
+        Assert.Equal(HttpStatusCode.OK, enrollB.StatusCode);
+        var epB = (await enrollB.Content.ReadFromJsonAsync<EnrollmentResponse>())!;
+
+        // Sign in as Tenant A's admin on a fresh cookie client
+        var tenantAClient = isolatedFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+        var loginA = await tenantAClient.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            email = "alpha@corp.test",
+            password = "AlphaPassword123!"
+        });
+        Assert.Equal(HttpStatusCode.OK, loginA.StatusCode);
+
+        // Tenant A admin CAN read Tenant A's policy
+        Assert.Equal(HttpStatusCode.OK, (await tenantAClient.GetAsync($"/api/v1/policies/{tenantAId}")).StatusCode);
+
+        // Tenant A admin CANNOT read Tenant B's policy or isolate Tenant B's endpoint -> 403 Forbidden
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenantAClient.GetAsync($"/api/v1/policies/{tenantBId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenantAClient.PostAsync($"/api/v1/endpoints/{epB.EndpointId}/isolate", null)).StatusCode);
+
+        // Tenant A admin listing endpoints does NOT see Tenant B's endpoint
+        var listResp = await tenantAClient.GetAsync("/api/v1/endpoints");
+        Assert.Equal(HttpStatusCode.OK, listResp.StatusCode);
+        var listJson = await listResp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, listJson.GetArrayLength());
     }
 }

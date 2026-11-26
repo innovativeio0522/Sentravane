@@ -12,6 +12,8 @@ public interface IFleetHubClient
     Task UpdatePolicy(EndpointPolicy policy);
     Task RequestForensics();
     Task AcknowledgeHeartbeat(DateTime serverTimeUtc);
+    Task ReportIncident(ForensicSnapshotPayload snapshot);
+    Task FleetUpdated();
 }
 
 /// <summary>

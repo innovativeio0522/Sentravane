@@ -212,6 +212,12 @@
                     <p class="text-xs text-slate-400 mt-1">Changes are broadcast instantly to all online Windows Sensors over SignalR without service restart.</p>
                 </div>
 
+                <div id="policyTenantSelectorContainer" class="hidden p-3 bg-slate-950 rounded-lg border border-slate-800">
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Target Organization</label>
+                    <select id="policyTenantSelect" onchange="fetchPolicy()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-cyan-500">
+                    </select>
+                </div>
+
                 <form id="policyForm" onsubmit="savePolicy(event)" class="space-y-5 text-sm">
                     <div class="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800">
                         <div>
@@ -385,6 +391,10 @@
 
             connection.on("ReportIncident", (snapshot) => {
                 fetchIncidents();
+                fetchEndpoints();
+            });
+
+            connection.on("FleetUpdated", () => {
                 fetchEndpoints();
             });
 
@@ -721,9 +731,32 @@
         }
 
         // Policy Actions
+        async function getActivePolicyTenantId() {
+            if (!currentUser) return null;
+            if (currentUser.role === 'SuperAdmin') {
+                const container = document.getElementById('policyTenantSelectorContainer');
+                const select = document.getElementById('policyTenantSelect');
+                container.classList.remove('hidden');
+
+                if (select.options.length === 0) {
+                    const res = await fetch(`${API_BASE}/api/v1/admin/tenants`);
+                    if (res.ok) {
+                        const tenants = await res.json();
+                        select.innerHTML = tenants.map(t => `<option value="${t.id}">${t.name} (${t.id})</option>`).join('');
+                    }
+                }
+                return select.value || null;
+            }
+            document.getElementById('policyTenantSelectorContainer').classList.add('hidden');
+            return currentUser.tenantId || null;
+        }
+
         async function fetchPolicy() {
             try {
-                const res = await fetch(`${API_BASE}/api/v1/policies/tenant_default`);
+                const tenantId = await getActivePolicyTenantId();
+                if (!tenantId) return;
+
+                const res = await fetch(`${API_BASE}/api/v1/policies/${encodeURIComponent(tenantId)}`);
                 if (!res.ok) return;
                 const pol = await res.json();
                 document.getElementById('polCanaryEnabled').checked = pol.canaryTripwiresEnabled;
@@ -740,8 +773,14 @@
 
         async function savePolicy(e) {
             e.preventDefault();
+            const tenantId = await getActivePolicyTenantId();
+            if (!tenantId) {
+                alert("No organization selected. Please provision or select a tenant first.");
+                return;
+            }
+
             const payload = {
-                tenantId: "tenant_default",
+                tenantId: tenantId,
                 canaryTripwiresEnabled: document.getElementById('polCanaryEnabled').checked,
                 wfpQuarantineEnabled: document.getElementById('polWfpEnabled').checked,
                 captureMinidumpOnIncident: document.getElementById('polDumpEnabled').checked,
@@ -749,7 +788,7 @@
                 rapidBurstWindowSeconds: parseInt(document.getElementById('polBurstWindow').value)
             };
 
-            const res = await fetch(`${API_BASE}/api/v1/policies/tenant_default`, {
+            const res = await fetch(`${API_BASE}/api/v1/policies/${encodeURIComponent(tenantId)}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

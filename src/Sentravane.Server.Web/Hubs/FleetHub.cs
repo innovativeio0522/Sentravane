@@ -52,6 +52,20 @@ public class FleetHub(
             endpoint.LastHeartbeatUtc = DateTime.UtcNow;
             await dbContext.SaveChangesAsync();
             logger.LogInformation("Endpoint {EndpointId} connected with socket {ConnectionId}", endpointId, Context.ConnectionId);
+
+            await Clients.Groups("superadmins", $"tenant_{endpoint.TenantId}").FleetUpdated();
+        }
+        else if (Context.User?.Identity?.IsAuthenticated == true)
+        {
+            // Dashboard browser session: join scoped tenant or superadmin group
+            if (Context.User.IsInRole("SuperAdmin"))
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, "superadmins");
+            }
+            else if (Context.User.FindFirst("TenantId")?.Value is { Length: > 0 } tenantId)
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant_{tenantId}");
+            }
         }
 
         await base.OnConnectedAsync();
@@ -68,6 +82,8 @@ public class FleetHub(
                 endpoint.CurrentConnectionId = null;
                 await dbContext.SaveChangesAsync();
                 logger.LogInformation("Endpoint {EndpointId} disconnected", endpointId);
+
+                await Clients.Groups("superadmins", $"tenant_{endpoint.TenantId}").FleetUpdated();
             }
         }
 
@@ -84,6 +100,8 @@ public class FleetHub(
                 ? EndpointStatus.Quarantined 
                 : EndpointStatus.Online;
             await dbContext.SaveChangesAsync();
+
+            await Clients.Groups("superadmins", $"tenant_{endpoint.TenantId}").FleetUpdated();
         }
 
         await Clients.Caller.AcknowledgeHeartbeat(DateTime.UtcNow);
@@ -115,6 +133,12 @@ public class FleetHub(
         }
 
         await dbContext.SaveChangesAsync();
+
+        // Notify authenticated dashboard browsers in real time
+        if (endpoint != null)
+        {
+            await Clients.Groups("superadmins", $"tenant_{endpoint.TenantId}").ReportIncident(snapshot);
+        }
 
         // Dispatch background webhook alert to tenant-configured webhook or fallback
         var tenant = endpoint != null ? await dbContext.Tenants.FindAsync(endpoint.TenantId) : null;
