@@ -20,6 +20,10 @@ builder.Services.AddSingleton<IForensicDumpService, ForensicDumpService>();
 builder.Services.AddSingleton<ICorrelationEngine, CorrelationEngine>();
 builder.Services.AddSingleton<IFleetSignalRClient, FleetSignalRClient>();
 builder.Services.AddSingleton<INamedPipeServerService, NamedPipeServerService>();
+builder.Services.AddSingleton<ISensorUpdaterService>(sp =>
+    new SensorUpdaterService(
+        sp.GetRequiredService<ILogger<SensorUpdaterService>>(),
+        sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
 
 // Background Worker
 builder.Services.AddHostedService<Worker>();

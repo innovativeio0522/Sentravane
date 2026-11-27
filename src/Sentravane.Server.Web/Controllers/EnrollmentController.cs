@@ -14,8 +14,24 @@ namespace Sentravane.Server.Web.Controllers;
 public class EnrollmentController(
     AppDbContext dbContext,
     LicenseManager licenseManager,
-    ILogger<EnrollmentController> logger) : ControllerBase
+    ILogger<EnrollmentController> logger,
+    IConfiguration? configuration = null) : ControllerBase
 {
+    [HttpGet("version")]
+    public ActionResult<SensorVersionManifest> GetLatestVersion()
+    {
+        var manifest = new SensorVersionManifest
+        {
+            LatestVersion = configuration?["Sentravane:SensorUpdate:LatestVersion"] ?? "1.0.0",
+            DownloadUrl = configuration?["Sentravane:SensorUpdate:DownloadUrl"] ?? string.Empty,
+            Sha256Checksum = configuration?["Sentravane:SensorUpdate:Sha256Checksum"] ?? string.Empty,
+            ReleaseNotes = configuration?["Sentravane:SensorUpdate:ReleaseNotes"] ?? "Initial release",
+            IsMandatory = bool.TryParse(configuration?["Sentravane:SensorUpdate:IsMandatory"], out var mandatory) && mandatory
+        };
+
+        return Ok(manifest);
+    }
+
     [HttpPost("enroll")]
     public async Task<ActionResult<EnrollmentResponse>> Enroll([FromBody] EnrollmentRequest request)
     {

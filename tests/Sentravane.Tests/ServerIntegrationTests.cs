@@ -330,4 +330,15 @@ public class ServerIntegrationTests : IClassFixture<TestServerFixture>
         var listJson = await listResp.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(0, listJson.GetArrayLength());
     }
+
+    [Fact]
+    public async Task FleetVersionEndpoint_ReturnsValidSensorManifest()
+    {
+        var resp = await _client.GetAsync("/api/v1/fleet/version");
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+        var manifest = await resp.Content.ReadFromJsonAsync<SensorVersionManifest>();
+        Assert.NotNull(manifest);
+        Assert.False(string.IsNullOrWhiteSpace(manifest.LatestVersion));
+    }
 }

@@ -13,17 +13,20 @@ public class Worker : BackgroundService
     private readonly ICorrelationEngine _correlationEngine;
     private readonly IFleetSignalRClient _fleetClient;
     private readonly INamedPipeServerService _pipeServer;
+    private readonly ISensorUpdaterService _updaterService;
 
     public Worker(
         ILogger<Worker> logger,
         ICorrelationEngine correlationEngine,
         IFleetSignalRClient fleetClient,
-        INamedPipeServerService pipeServer)
+        INamedPipeServerService pipeServer,
+        ISensorUpdaterService updaterService)
     {
         _logger = logger;
         _correlationEngine = correlationEngine;
         _fleetClient = fleetClient;
         _pipeServer = pipeServer;
+        _updaterService = updaterService;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -41,12 +44,22 @@ public class Worker : BackgroundService
             // Connect to Fleet Hub over SignalR
             await _fleetClient.StartAsync(stoppingToken);
 
+            DateTime lastUpdateCheckUtc = DateTime.MinValue;
+            var updateInterval = TimeSpan.FromHours(6);
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 // Periodic maintenance: drain offline queue if connection restored
                 if (_fleetClient.IsConnected)
                 {
                     await _fleetClient.DrainOfflineQueueAsync();
+                }
+
+                // Periodic self-update check every 6 hours
+                if (DateTime.UtcNow - lastUpdateCheckUtc >= updateInterval)
+                {
+                    lastUpdateCheckUtc = DateTime.UtcNow;
+                    await _updaterService.CheckAndApplyUpdateAsync(stoppingToken);
                 }
 
                 await Task.Delay(15000, stoppingToken);

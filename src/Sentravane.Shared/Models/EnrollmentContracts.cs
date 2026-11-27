@@ -20,3 +20,12 @@ public record EnrollmentResponse
     public EndpointPolicy? Policies { get; init; }
 }
 
+public record SensorVersionManifest
+{
+    public string LatestVersion { get; init; } = "1.0.0";
+    public string DownloadUrl { get; init; } = string.Empty;
+    public string Sha256Checksum { get; init; } = string.Empty;
+    public string ReleaseNotes { get; init; } = string.Empty;
+    public bool IsMandatory { get; init; }
+}
+
