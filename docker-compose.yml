@@ -14,8 +14,27 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5000
+      - DatabaseProvider=Sqlite
       - ConnectionStrings__DefaultConnection=Data Source=/data/sentravane_fleet.db
+
+  # Optional PostgreSQL container for enterprise deployments (docker compose --profile postgres up)
+  postgres:
+    image: postgres:16-alpine
+    container_name: sentravane-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=sentravane
+      - POSTGRES_USER=sentravane
+      - POSTGRES_PASSWORD=sentravane_secret
+    volumes:
+      - sentravane_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    profiles:
+      - postgres
 
 volumes:
   sentravane_data:
+    driver: local
+  sentravane_pgdata:
     driver: local

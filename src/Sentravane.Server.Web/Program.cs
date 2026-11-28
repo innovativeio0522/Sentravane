@@ -11,12 +11,33 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpClient();
 
-// SQLite for local developer velocity and fleet storage
+// Database Provider configuration (PostgreSQL or SQLite)
+var dbProvider = builder.Configuration["DatabaseProvider"] ?? "Sqlite";
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
     ?? "Data Source=sentravane_fleet.db";
 
+bool isPostgres = string.Equals(dbProvider, "PostgreSql", StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(dbProvider, "Npgsql", StringComparison.OrdinalIgnoreCase) ||
+                  connectionString.StartsWith("Host=", StringComparison.OrdinalIgnoreCase) ||
+                  connectionString.StartsWith("Server=", StringComparison.OrdinalIgnoreCase) ||
+                  connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+                  connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase);
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(connectionString));
+{
+    if (isPostgres)
+    {
+        options.UseNpgsql(connectionString, npgsqlOptions =>
+        {
+            npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 3);
+        });
+    }
+    else
+    {
+        options.UseSqlite(connectionString);
+    }
+});
 
 // Register Security & Licensing services
 builder.Services.AddSingleton<IPasswordHasherService, PasswordHasherService>();
